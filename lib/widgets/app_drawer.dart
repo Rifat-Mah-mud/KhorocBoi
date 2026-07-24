@@ -1,0 +1,199 @@
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:intl/intl.dart';
+
+import '../models/daily_tab.dart';
+import '../providers/app_providers.dart';
+import '../screens/analytics_screen.dart';
+import '../screens/daily_tab_screen.dart';
+import '../theme/app_brand.dart';
+import '../theme/app_theme.dart';
+import 'app_logo.dart';
+
+class AppDrawer extends ConsumerStatefulWidget {
+  const AppDrawer({super.key});
+
+  @override
+  ConsumerState<AppDrawer> createState() => _AppDrawerState();
+}
+
+class _AppDrawerState extends ConsumerState<AppDrawer> {
+  final _searchController = TextEditingController();
+  String _query = '';
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final tabs = ref.watch(tabsProvider);
+    final grouped = <String, List<DailyTab>>{};
+    final dateFmt = DateFormat('d MMM');
+    final monthFmt = DateFormat('MMMM yyyy');
+
+    for (final tab in tabs) {
+      final label = monthFmt.format(tab.date);
+      if (_query.isNotEmpty) {
+        final q = _query.toLowerCase();
+        final matchDate = DateFormat('yyyy-MM-dd')
+                .format(tab.date)
+                .contains(q) ||
+            DateFormat('d MMM yyyy').format(tab.date).toLowerCase().contains(q) ||
+            DateFormat('MMMM').format(tab.date).toLowerCase().contains(q);
+        if (!matchDate) continue;
+      }
+      grouped.putIfAbsent(label, () => []).add(tab);
+    }
+
+    return Drawer(
+      child: SafeArea(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 16, 20, 12),
+              child: Row(
+                children: [
+                  const AppLogo(size: 44),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Text(
+                      AppBrand.workspaceTitle,
+                      style:
+                          Theme.of(context).textTheme.headlineSmall?.copyWith(
+                                color: AppColors.lushGreen,
+                                fontWeight: FontWeight.w600,
+                              ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const Divider(height: 1),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(12, 12, 12, 8),
+              child: Material(
+                color: AppColors.primaryContainer,
+                borderRadius: BorderRadius.circular(12),
+                child: InkWell(
+                  borderRadius: BorderRadius.circular(12),
+                  onTap: () {
+                    Navigator.pop(context);
+                    Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (_) => const AnalyticsScreen(),
+                      ),
+                    );
+                  },
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 12,
+                    ),
+                    child: Row(
+                      children: [
+                        const Icon(
+                          Icons.insights,
+                          color: AppColors.onPrimaryContainer,
+                        ),
+                        const SizedBox(width: 12),
+                        Text(
+                          'Analytics & Insights',
+                          style:
+                              Theme.of(context).textTheme.bodyLarge?.copyWith(
+                                    color: AppColors.onPrimaryContainer,
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(12, 4, 12, 8),
+              child: TextField(
+                controller: _searchController,
+                onChanged: (v) => setState(() => _query = v.trim()),
+                decoration: InputDecoration(
+                  hintText: 'Search by date…',
+                  prefixIcon: const Icon(Icons.search, size: 20),
+                  filled: true,
+                  fillColor: Theme.of(context).brightness == Brightness.light
+                      ? Colors.white
+                      : AppColors.darkSurfaceLowest,
+                  contentPadding: const EdgeInsets.symmetric(vertical: 0),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: BorderSide(color: AppColors.lushBorder),
+                  ),
+                  enabledBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: BorderSide(color: AppColors.lushBorder),
+                  ),
+                ),
+              ),
+            ),
+            Expanded(
+              child: grouped.isEmpty
+                  ? Center(
+                      child: Text(
+                        'No tabs yet',
+                        style: Theme.of(context).textTheme.bodyMedium,
+                      ),
+                    )
+                  : ListView(
+                      padding: const EdgeInsets.only(bottom: 24),
+                      children: [
+                        for (final month in grouped.keys) ...[
+                          Padding(
+                            padding: const EdgeInsets.fromLTRB(20, 16, 20, 8),
+                            child: Text(
+                              month,
+                              style: Theme.of(context)
+                                  .textTheme
+                                  .labelMedium
+                                  ?.copyWith(
+                                    color: AppColors.lushGreen,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                            ),
+                          ),
+                          for (final tab in grouped[month]!)
+                            ListTile(
+                              leading: const Icon(
+                                Icons.calendar_today_outlined,
+                                size: 20,
+                              ),
+                              title: Text(dateFmt.format(tab.date)),
+                              subtitle: Text(
+                                '${tab.transactionCount} items · ৳ ${NumberFormat('#,##0').format(tab.total)}',
+                              ),
+                              onTap: () {
+                                Navigator.pop(context);
+                                Navigator.of(context).push(
+                                  MaterialPageRoute(
+                                    builder: (_) =>
+                                        DailyTabScreen(tabId: tab.id),
+                                  ),
+                                );
+                              },
+                            ),
+                        ],
+                      ],
+                    ),
+            ),
+            const Padding(
+              padding: EdgeInsets.fromLTRB(16, 8, 16, 16),
+              child: DevelopedByLabel(compact: true),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
