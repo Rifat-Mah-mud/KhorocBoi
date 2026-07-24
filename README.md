@@ -36,6 +36,14 @@ Get a key at: https://console.groq.com/keys
 
 Without a key, the app still works offline using the dictionary.
 
+## Android force update (GitHub Releases)
+
+On **Android sideload APKs**, the app checks GitHub’s latest release after startup. If the release tag is newer than `pubspec.yaml` `version`, the UI is replaced with a mandatory update screen (download APK → system installer). Offline or API errors **fail open** — the app keeps working.
+
+1. Edit `lib/config/release_config.dart` — set `githubOwner` and `githubRepo` (public repo with Releases).
+2. Bump `version:` in `pubspec.yaml`.
+3. `flutter build apk --release`
+4. Create GitHub Release tag `vX.Y.Z` (leading `v` is stripped) and attach the `.apk`.
 
 ## Android Studio + SDK + PATH setup
 

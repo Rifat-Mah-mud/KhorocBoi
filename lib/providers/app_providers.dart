@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/daily_tab.dart';
 import '../models/dictionary_entry.dart';
 import '../models/expense_entry.dart';
+import '../core/update/app_update_service.dart';
 import '../services/ai_service.dart';
 import '../services/dictionary_service.dart';
 import '../services/expense_parser_service.dart';
@@ -14,6 +15,10 @@ final dictionaryServiceProvider = Provider<DictionaryService>((ref) {
 
 final aiServiceProvider = Provider<AiService>((ref) {
   throw UnimplementedError('Override in main()');
+});
+
+final appUpdateServiceProvider = Provider<AppUpdateService>((ref) {
+  return AppUpdateService();
 });
 
 final storageServiceProvider = Provider<StorageService>((ref) {

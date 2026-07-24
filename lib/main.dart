@@ -1,6 +1,11 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import 'core/update/app_update_info.dart';
+import 'core/update/app_update_service.dart';
+import 'core/update/force_update_page.dart';
 import 'providers/app_providers.dart';
 import 'screens/home_screen.dart';
 import 'services/ai_service.dart';
@@ -33,8 +38,33 @@ Future<void> main() async {
   );
 }
 
-class KhorocboiApp extends StatelessWidget {
+class KhorocboiApp extends ConsumerStatefulWidget {
   const KhorocboiApp({super.key});
+
+  @override
+  ConsumerState<KhorocboiApp> createState() => _KhorocboiAppState();
+}
+
+class _KhorocboiAppState extends ConsumerState<KhorocboiApp> {
+  AppUpdateInfo? _pendingUpdate;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      unawaited(_checkForForceUpdate());
+    });
+  }
+
+  Future<void> _checkForForceUpdate() async {
+    try {
+      final update = await ref.read(appUpdateServiceProvider).checkForUpdate();
+      if (!mounted || update == null) return;
+      setState(() => _pendingUpdate = update);
+    } catch (error) {
+      debugPrint('Force update gate failed: $error');
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -45,6 +75,16 @@ class KhorocboiApp extends StatelessWidget {
       darkTheme: AppTheme.dark(),
       themeMode: ThemeMode.system,
       home: const HomeScreen(),
+      builder: (context, child) {
+        final pending = _pendingUpdate;
+        if (pending != null) {
+          return ForceUpdatePage(
+            update: pending,
+            updateService: ref.read(appUpdateServiceProvider),
+          );
+        }
+        return child ?? const SizedBox.shrink();
+      },
     );
   }
 }
