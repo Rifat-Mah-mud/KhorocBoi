@@ -45,6 +45,15 @@ void main() {
       expect(ExpenseParserService.extractAmount('rent 12,500'), 12500);
     });
 
+    test('extracts four or more digits without commas', () {
+      expect(ExpenseParserService.extractAmount('lunch 1500'), 1500);
+      expect(ExpenseParserService.extractAmount('rent 1000 tk'), 1000);
+      expect(ExpenseParserService.extractAmount('item 12345'), 12345);
+      expect(ExpenseParserService.extractAmount('bill 12500.50'), 12500.50);
+      expect(ExpenseParserService.extractAmount('phone 250000'), 250000);
+      expect(ExpenseParserService.extractAmount('laptop 1250000 tk'), 1250000);
+    });
+
     test('returns null when no amount', () {
       expect(ExpenseParserService.extractAmount('just text'), isNull);
     });

@@ -16,9 +16,9 @@ class ExpenseParserService {
   final DictionaryService _dictionary;
   final AiService _aiService;
 
-  /// Matches amounts like: 20, 20tk, 20 tk, 20taka, 50/-, 1,200.50, ৳50
+  /// Matches amounts like: 20, 20tk, 20 tk, 20taka, 50/-, 1500, 1,200.50, ৳50
   static final RegExp amountPattern = RegExp(
-    r'(?:৳\s*)?(\d{1,3}(?:,\d{3})*(?:\.\d+)?|\d+(?:\.\d+)?)\s*(?:tk|taka|৳|\/\-)?',
+    r'(?:৳\s*)?(\d+(?:,\d{3})*(?:\.\d+)?)\s*(?:tk|taka|৳|\/\-)?',
     caseSensitive: false,
   );
 
