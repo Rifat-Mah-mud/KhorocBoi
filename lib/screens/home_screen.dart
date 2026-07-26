@@ -107,8 +107,6 @@ class HomeScreen extends ConsumerWidget {
                         icon: const Icon(Icons.add),
                         label: const Text('Create New Tab'),
                       ),
-                      const SizedBox(height: 32),
-                      const DevelopedByLabel(),
                     ],
                   ),
                 ),
@@ -124,7 +122,7 @@ class HomeScreen extends ConsumerWidget {
                 ),
               ),
               SliverPadding(
-                padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+                padding: const EdgeInsets.fromLTRB(16, 0, 16, 100),
                 sliver: SliverList.separated(
                   itemCount: tabs.length,
                   separatorBuilder: (_, __) => const SizedBox(height: 8),
@@ -141,12 +139,6 @@ class HomeScreen extends ConsumerWidget {
                       },
                     );
                   },
-                ),
-              ),
-              const SliverToBoxAdapter(
-                child: Padding(
-                  padding: EdgeInsets.fromLTRB(16, 8, 16, 100),
-                  child: DevelopedByLabel(),
                 ),
               ),
             ],
