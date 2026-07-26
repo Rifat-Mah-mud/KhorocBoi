@@ -40,10 +40,22 @@ Without a key, the app still works offline using the dictionary.
 
 On **Android sideload APKs**, the app checks GitHub’s latest release after startup. If the release tag is newer than `pubspec.yaml` `version`, the UI is replaced with a mandatory update screen (download APK → system installer). Offline or API errors **fail open** — the app keeps working.
 
+### Release signing (required for updates)
+
+All release APKs must be signed with the **same** upload keystore. Otherwise Android reports conflicting signatures and force update fails.
+
+1. Copy `android/key.properties.example` → `android/key.properties` and fill in passwords.
+2. Keep `android/upload-keystore.jks` + `android/key.properties` backed up privately (both are gitignored).
+3. Always build releases on a machine that has those files.
+
+### Publish a release
+
 1. Edit `lib/config/release_config.dart` — set `githubOwner` and `githubRepo` (public repo with Releases).
-2. Bump `version:` in `pubspec.yaml`.
+2. Bump `version:` in `pubspec.yaml` (both name and `+build` number).
 3. `flutter build apk --release`
 4. Create GitHub Release tag `vX.Y.Z` (leading `v` is stripped) and attach the `.apk`.
+
+**One-time migration:** users who installed an older debug-signed APK must uninstall once, then install the new release-signed APK.
 
 ## Android Studio + SDK + PATH setup
 

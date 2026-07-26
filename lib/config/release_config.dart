@@ -1,6 +1,9 @@
 /// GitHub Releases — source of truth for Android force updates.
 ///
-/// 1. Bump `version` in pubspec.yaml (must match what users install).
+/// Requires `android/key.properties` + upload keystore so every release APK
+/// shares the same signature (otherwise force-update install fails).
+///
+/// 1. Bump `version` in pubspec.yaml (name and +build).
 /// 2. Build: `flutter build apk --release`
 /// 3. Create a GitHub Release with tag `vX.Y.Z` and attach the APK.
 abstract final class ReleaseConfig {

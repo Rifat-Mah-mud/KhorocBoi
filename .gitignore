@@ -40,5 +40,7 @@ app.*.map.json
 .env
 *.jks
 *.keystore
+*.p12
+android/key.properties
 # api_config.dart is committed for this private personal repo.
 # Rotate the Groq key if the repo is ever made public.
