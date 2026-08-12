@@ -85,7 +85,7 @@ class AnalyticsState {
   Map<DateTime, double> get dailyTotals {
     final map = <DateTime, double>{};
     for (final tab in tabs) {
-      map[tab.dateOnly] = tab.total;
+      map[tab.dateOnly] = (map[tab.dateOnly] ?? 0) + tab.total;
     }
     return map;
   }
@@ -141,6 +141,18 @@ class TabControllerNotifier extends StateNotifier<AsyncValue<void>> {
     return tab;
   }
 
+  Future<DailyTab> createAnotherToday() async {
+    final tab = await _storage.createAdditionalTabForDate(DateTime.now());
+    _bump();
+    return tab;
+  }
+
+  DailyTab? latestTodayTab() => _storage.getTabByDate(DateTime.now());
+
+  List<DailyTab> todayTabs() => _storage.tabsForDate(DateTime.now());
+
+  bool get hasTodayTab => _storage.tabsForDate(DateTime.now()).isNotEmpty;
+
   Future<DailyTab> createForDate(DateTime date) async {
     final tab = await _storage.createTabForDate(date);
     _bump();
@@ -157,6 +169,7 @@ class TabControllerNotifier extends StateNotifier<AsyncValue<void>> {
   Future<void> autoSaveTab({
     required String tabId,
     required String notesText,
+    String? customTitle,
   }) async {
     state = const AsyncLoading();
     try {
@@ -178,6 +191,7 @@ class TabControllerNotifier extends StateNotifier<AsyncValue<void>> {
         tabId: tabId,
         notesText: notesText,
         entries: entries,
+        customTitle: customTitle,
       );
       _bump();
 
@@ -199,6 +213,7 @@ class TabControllerNotifier extends StateNotifier<AsyncValue<void>> {
         tabId: tabId,
         notesText: notesText,
         entries: entries,
+        customTitle: customTitle,
       );
       _bump();
       _backup.scheduleUploadAfterEdit();

@@ -59,6 +59,19 @@ void main() {
     test('returns null when no amount', () {
       expect(ExpenseParserService.extractAmount('just text'), isNull);
     });
+
+    test('skips single-digit quantities without currency', () {
+      expect(ExpenseParserService.extractAmount('2 peice apple'), isNull);
+      expect(ExpenseParserService.extractAmount('lighter 5'), isNull);
+      expect(ExpenseParserService.extractAmount('5 peice'), isNull);
+    });
+
+    test('keeps single-digit amount when marked as money', () {
+      expect(ExpenseParserService.extractAmount('lighter 5 tk'), 5);
+      expect(ExpenseParserService.extractAmount('tea 5taka'), 5);
+      expect(ExpenseParserService.extractAmount('item 5/-'), 5);
+      expect(ExpenseParserService.extractAmount('৳5 snack'), 5);
+    });
   });
 
   group('item phrase extraction', () {
@@ -106,6 +119,16 @@ void main() {
       final parsed = parser.parseLineSync('bus vara 20 tk');
       expect(parsed.length, 1);
       expect(parsed.first.amount, 20);
+    });
+
+    test('skips quantity digits: 2 peice apple 30 tk and 5 peice 10 tk', () {
+      final parser = buildParser();
+      final parsed = parser.parseLineSync(
+        '2 peice apple 30 tk and 5 peice 10 tk',
+      );
+      expect(parsed.length, 2);
+      expect(parsed.map((e) => e.amount).toList(), [30, 10]);
+      expect(parsed.fold<double>(0, (s, e) => s + e.amount), 40);
     });
   });
 

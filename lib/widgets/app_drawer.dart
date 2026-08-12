@@ -32,7 +32,6 @@ class _AppDrawerState extends ConsumerState<AppDrawer> {
   Widget build(BuildContext context) {
     final tabs = ref.watch(tabsProvider);
     final grouped = <String, List<DailyTab>>{};
-    final dateFmt = DateFormat('d MMM');
     final monthFmt = DateFormat('MMMM yyyy');
 
     for (final tab in tabs) {
@@ -186,14 +185,39 @@ class _AppDrawerState extends ConsumerState<AppDrawer> {
                             ),
                           ),
                           for (final tab in grouped[month]!)
-                            ListTile(
+                            Builder(
+                              builder: (context) {
+                                final count = grouped[month]!
+                                    .where((t) =>
+                                        t.date.year == tab.date.year &&
+                                        t.date.month == tab.date.month &&
+                                        t.date.day == tab.date.day)
+                                    .length;
+                                final dateText = tab.displayTitle(
+                                  sameDayCount: count,
+                                  pattern: 'd MMM',
+                                );
+                                return ListTile(
                               leading: const Icon(
                                 Icons.calendar_today_outlined,
                                 size: 20,
                               ),
-                              title: Text(dateFmt.format(tab.date)),
+                              title: Text(
+                                tab.headline(
+                                  sameDayCount: count,
+                                  pattern: 'd MMM',
+                                ),
+                              ),
                               subtitle: Text(
-                                '${tab.transactionCount} items · ৳ ${NumberFormat('#,##0').format(tab.total)}',
+                                tab.hasCustomTitle
+                                    ? '$dateText · ${tab.transactionCount} items · ৳ ${NumberFormat('#,##0').format(tab.total)}'
+                                    : '${tab.transactionCount} items · ৳ ${NumberFormat('#,##0').format(tab.total)}',
+                                style: Theme.of(context)
+                                    .textTheme
+                                    .bodySmall
+                                    ?.copyWith(
+                                      color: AppColors.onSurfaceVariant,
+                                    ),
                               ),
                               trailing: IconButton(
                                 tooltip: 'Delete',
@@ -202,8 +226,10 @@ class _AppDrawerState extends ConsumerState<AppDrawer> {
                                   color: AppColors.error.withValues(alpha: 0.85),
                                 ),
                                 onPressed: () async {
-                                  final label =
-                                      DateFormat('d MMM yyyy').format(tab.date);
+                                  final label = tab.headline(
+                                    sameDayCount: count,
+                                    pattern: 'd MMM yyyy',
+                                  );
                                   final confirmed = await showDialog<bool>(
                                     context: context,
                                     builder: (ctx) => AlertDialog(
@@ -243,6 +269,8 @@ class _AppDrawerState extends ConsumerState<AppDrawer> {
                                         DailyTabScreen(tabId: tab.id),
                                   ),
                                 );
+                              },
+                            );
                               },
                             ),
                         ],

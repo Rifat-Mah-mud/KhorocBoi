@@ -9,18 +9,20 @@ class DailyTabListTile extends StatelessWidget {
     super.key,
     required this.tab,
     required this.onTap,
+    this.sameDayCount = 1,
     this.onDelete,
   });
 
   final DailyTab tab;
   final VoidCallback onTap;
+  final int sameDayCount;
   final VoidCallback? onDelete;
 
   @override
   Widget build(BuildContext context) {
-    final dateFmt = DateFormat('MMMM d, yyyy');
     final moneyFmt = NumberFormat('#,##0', 'en_US');
     final isDark = Theme.of(context).brightness == Brightness.dark;
+    final dateTitle = tab.displayTitle(sameDayCount: sameDayCount);
 
     return Material(
       color: isDark ? AppColors.darkSurfaceLowest : AppColors.surfaceLowest,
@@ -60,11 +62,21 @@ class DailyTabListTile extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      dateFmt.format(tab.date),
+                      tab.headline(sameDayCount: sameDayCount),
                       style: Theme.of(context).textTheme.bodyLarge?.copyWith(
                             fontWeight: FontWeight.w600,
                           ),
                     ),
+                    if (tab.hasCustomTitle) ...[
+                      const SizedBox(height: 2),
+                      Text(
+                        dateTitle,
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                              color: AppColors.onSurfaceVariant,
+                              fontWeight: FontWeight.w500,
+                            ),
+                      ),
+                    ],
                     const SizedBox(height: 4),
                     Text(
                       '${tab.transactionCount} transaction${tab.transactionCount == 1 ? '' : 's'}',

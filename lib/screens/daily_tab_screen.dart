@@ -3,7 +3,6 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:intl/intl.dart';
 
 import '../providers/app_providers.dart';
 import '../theme/app_theme.dart';
@@ -21,6 +20,7 @@ class DailyTabScreen extends ConsumerStatefulWidget {
 class _DailyTabScreenState extends ConsumerState<DailyTabScreen>
     with WidgetsBindingObserver {
   late final TextEditingController _controller;
+  late final TextEditingController _titleController;
   Timer? _debounce;
   bool _expanded = false;
   bool _showSaved = false;
@@ -31,15 +31,19 @@ class _DailyTabScreenState extends ConsumerState<DailyTabScreen>
     super.initState();
     WidgetsBinding.instance.addObserver(this);
     _controller = TextEditingController();
-    _controller.addListener(_onTextChanged);
+    _titleController = TextEditingController();
+    _controller.addListener(_onNotesChanged);
+    _titleController.addListener(_onTitleChanged);
   }
 
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     _debounce?.cancel();
-    _controller.removeListener(_onTextChanged);
+    _controller.removeListener(_onNotesChanged);
+    _titleController.removeListener(_onTitleChanged);
     _controller.dispose();
+    _titleController.dispose();
     super.dispose();
   }
 
@@ -51,24 +55,29 @@ class _DailyTabScreenState extends ConsumerState<DailyTabScreen>
     }
   }
 
-  void _hydrateIfNeeded(String notes) {
+  void _hydrateIfNeeded(String notes, String customTitle) {
     if (_hydrated) return;
     _hydrated = true;
     _controller.text = notes;
     _controller.selection = TextSelection.collapsed(offset: notes.length);
+    _titleController.text = customTitle;
   }
 
-  void _onTextChanged() {
-    final text = _controller.text;
-    // Immediate local reparse for reactive total (via notifier save sync path).
+  void _onNotesChanged() {
+    _scheduleSave(faster: _controller.text.endsWith('\n'));
+  }
+
+  void _onTitleChanged() {
+    setState(() {});
+    _scheduleSave();
+  }
+
+  void _scheduleSave({bool faster = false}) {
     _debounce?.cancel();
-
-    // Faster save on newline.
-    final delay = text.endsWith('\n')
-        ? const Duration(milliseconds: 200)
-        : const Duration(milliseconds: 700);
-
-    _debounce = Timer(delay, _saveNow);
+    _debounce = Timer(
+      Duration(milliseconds: faster ? 200 : 700),
+      _saveNow,
+    );
   }
 
   Future<void> _saveNow() async {
@@ -76,6 +85,7 @@ class _DailyTabScreenState extends ConsumerState<DailyTabScreen>
     await ref.read(tabControllerProvider.notifier).autoSaveTab(
           tabId: widget.tabId,
           notesText: _controller.text,
+          customTitle: _titleController.text,
         );
     if (!mounted) return;
     setState(() => _showSaved = true);
@@ -94,13 +104,23 @@ class _DailyTabScreenState extends ConsumerState<DailyTabScreen>
       );
     }
 
-    _hydrateIfNeeded(tab.notesText);
+    _hydrateIfNeeded(tab.notesText, tab.customTitle);
 
-    final title = DateFormat('MMM d, yyyy').format(tab.date);
+    final sameDayCount = ref.watch(tabsProvider).where((t) {
+      return t.date.year == tab.date.year &&
+          t.date.month == tab.date.month &&
+          t.date.day == tab.date.day;
+    }).length;
+    final dateLabel = tab.displayTitle(
+      sameDayCount: sameDayCount,
+      pattern: 'MMM d, yyyy',
+    );
+    final hasTitle = _titleController.text.trim().isNotEmpty;
     final bengali = GoogleFonts.notoSansBengali();
 
     return Scaffold(
       appBar: AppBar(
+        toolbarHeight: hasTitle ? 72 : kToolbarHeight,
         leading: IconButton(
           icon: const Icon(Icons.arrow_back),
           onPressed: () async {
@@ -108,7 +128,40 @@ class _DailyTabScreenState extends ConsumerState<DailyTabScreen>
             if (context.mounted) Navigator.of(context).pop();
           },
         ),
-        title: Text(title),
+        title: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(
+              controller: _titleController,
+              maxLines: 1,
+              textInputAction: TextInputAction.done,
+              style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                    fontWeight: FontWeight.w700,
+                    color: AppColors.primary,
+                    fontFamilyFallback: [bengali.fontFamily!],
+                  ),
+              decoration: InputDecoration(
+                isDense: true,
+                border: InputBorder.none,
+                hintText: dateLabel,
+                hintStyle: Theme.of(context).textTheme.titleLarge?.copyWith(
+                      fontWeight: FontWeight.w700,
+                      color: AppColors.primary,
+                    ),
+                contentPadding: EdgeInsets.zero,
+              ),
+            ),
+            if (hasTitle)
+              Text(
+                dateLabel,
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: AppColors.onSurfaceVariant,
+                      fontWeight: FontWeight.w500,
+                    ),
+              ),
+          ],
+        ),
         actions: [
           AnimatedOpacity(
             opacity: _showSaved ? 1 : 0,

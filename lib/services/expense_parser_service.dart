@@ -19,11 +19,35 @@ class ExpenseParserService {
   final DictionaryService _dictionary;
   final AiService _aiService;
 
-  /// Matches amounts like: 20, 20tk, 20 tk, 20taka, 50/-, 1500, 1,200.50, ৳50
+  /// Matches money amounts, not quantity digits.
+  ///
+  /// - 2+ digits (`30`, `10`, `1500`) count even without `tk`
+  /// - A single digit (`5`) counts only with currency: `5 tk`, `tk 5`, `৳5`, `5/-`
   static final RegExp amountPattern = RegExp(
-    r'(?:৳\s*)?(\d+(?:,\d{3})*(?:\.\d+)?)\s*(?:tk|taka|৳|\/\-)?',
+    r'(?:'
+    r'৳\s*(\d+(?:,\d{3})*(?:\.\d+)?)'
+    r'|'
+    r'(?:tk|taka)\s*(\d+(?:,\d{3})*(?:\.\d+)?)'
+    r'|'
+    r'(\d{2,}(?:,\d{3})*(?:\.\d+)?)\s*(?:tk|taka|৳|\/\-)?'
+    r'|'
+    r'(\d(?:\.\d+)?)\s*(?:tk|taka|৳|\/\-)'
+    r')',
     caseSensitive: false,
   );
+
+  static final RegExp _leadingConnector = RegExp(
+    r'^(?:and|&|plus|then)\s+',
+    caseSensitive: false,
+  );
+
+  static String? _amountFromMatch(RegExpMatch match) {
+    for (var i = 1; i <= match.groupCount; i++) {
+      final raw = match.group(i);
+      if (raw != null && raw.isNotEmpty) return raw;
+    }
+    return null;
+  }
 
   /// Currency / filler tokens stripped from item text.
   static final Set<String> _noiseTokens = {
@@ -50,7 +74,8 @@ class ExpenseParserService {
     for (var i = 0; i < matches.length; i++) {
       final match = matches[i];
       final start = i == 0 ? 0 : matches[i - 1].end;
-      final segment = trimmed.substring(start, match.end).trim();
+      var segment = trimmed.substring(start, match.end).trim();
+      segment = segment.replaceFirst(_leadingConnector, '').trim();
       if (segment.isEmpty) continue;
       // Skip orphan amounts with no item text (e.g. trailing " 40").
       final phrase = extractItemPhrase(segment);
@@ -68,7 +93,7 @@ class ExpenseParserService {
     if (matches.isEmpty) return null;
 
     for (final match in matches.toList().reversed) {
-      final raw = match.group(1);
+      final raw = _amountFromMatch(match);
       if (raw == null) continue;
       final value = double.tryParse(raw.replaceAll(',', ''));
       if (value != null) return value;

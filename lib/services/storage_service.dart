@@ -21,26 +21,61 @@ class StorageService {
 
   List<DailyTab> getAllTabs() {
     final tabs = _tabsBox.values.toList();
-    tabs.sort((a, b) => b.dateOnly.compareTo(a.dateOnly));
+    tabs.sort((a, b) {
+      final byDate = b.dateOnly.compareTo(a.dateOnly);
+      if (byDate != 0) return byDate;
+      return b.slot.compareTo(a.slot);
+    });
     return tabs;
   }
 
   DailyTab? getTab(String id) => _tabsBox.get(id);
 
-  DailyTab? getTabByDate(DateTime date) {
+  String dateKey(DateTime d) => _dateKey(d);
+
+  List<DailyTab> tabsForDate(DateTime date) {
     final key = _dateKey(date);
-    for (final tab in _tabsBox.values) {
-      if (_dateKey(tab.date) == key) return tab;
-    }
-    return null;
+    final list = _tabsBox.values
+        .where((tab) => _dateKey(tab.date) == key)
+        .toList()
+      ..sort((a, b) => a.slot.compareTo(b.slot));
+    return list;
+  }
+
+  int sameDayCount(DailyTab tab) => tabsForDate(tab.date).length;
+
+  DailyTab? getTabByDate(DateTime date) {
+    final tabs = tabsForDate(date);
+    return tabs.isEmpty ? null : tabs.last;
   }
 
   Future<DailyTab> createTabForDate(DateTime date) async {
-    final existing = getTabByDate(date);
-    if (existing != null) return existing;
+    final existing = tabsForDate(date);
+    if (existing.isNotEmpty) return existing.last;
 
     final tab = DailyTab(
       date: DateTime(date.year, date.month, date.day),
+      slot: 1,
+    );
+    await _tabsBox.put(tab.id, tab);
+    return tab;
+  }
+
+  /// Always creates another tab for [date], numbering 1, 2, 3…
+  Future<DailyTab> createAdditionalTabForDate(DateTime date) async {
+    final existing = tabsForDate(date);
+    if (existing.isEmpty) return createTabForDate(date);
+
+    final first = existing.first;
+    if (existing.length == 1 && first.slot != 1) {
+      await _tabsBox.put(first.id, first.copyWith(slot: 1));
+    }
+
+    final nextSlot =
+        existing.map((t) => t.slot).reduce((a, b) => a > b ? a : b) + 1;
+    final tab = DailyTab(
+      date: DateTime(date.year, date.month, date.day),
+      slot: nextSlot,
     );
     await _tabsBox.put(tab.id, tab);
     return tab;
@@ -56,12 +91,14 @@ class StorageService {
     required String tabId,
     required String notesText,
     required List<ExpenseEntry> entries,
+    String? customTitle,
   }) async {
     final existing = _tabsBox.get(tabId);
     if (existing == null) return;
     final updated = existing.copyWith(
       notesText: notesText,
       entries: entries,
+      customTitle: customTitle,
     );
     await _tabsBox.put(tabId, updated);
   }
@@ -133,26 +170,18 @@ class StorageService {
     }
   }
 
-  /// Merge cloud tabs with local by calendar date.
-  /// Prefer the richer notes text when both sides have the same day.
+  /// Merge cloud tabs with local by tab id (supports multiple tabs per day).
   Future<int> mergeFromBackup(Map<String, dynamic> backup) async {
     final rawTabs = backup['tabs'] as List<dynamic>? ?? const [];
     final cloudTabs = rawTabs
         .map((e) => DailyTab.fromJson(e as Map<String, dynamic>))
         .toList();
 
-    final byDate = <String, DailyTab>{};
-    for (final tab in getAllTabs()) {
-      byDate[_dateKey(tab.dateOnly)] = tab;
-    }
-
     var changed = 0;
     for (final cloud in cloudTabs) {
-      final key = _dateKey(cloud.dateOnly);
-      final local = byDate[key];
+      final local = _tabsBox.get(cloud.id);
       if (local == null) {
         await _tabsBox.put(cloud.id, cloud);
-        byDate[key] = cloud;
         changed++;
         continue;
       }
@@ -163,9 +192,10 @@ class StorageService {
       final merged = local.copyWith(
         notesText: cloud.notesText,
         entries: cloud.entries,
+        slot: cloud.slot,
+        customTitle: cloud.customTitle,
       );
       await _tabsBox.put(local.id, merged);
-      byDate[key] = merged;
       changed++;
     }
     return changed;
