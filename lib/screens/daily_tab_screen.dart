@@ -152,7 +152,7 @@ class _DailyTabScreenState extends ConsumerState<DailyTabScreen>
                 decoration: InputDecoration(
                   border: InputBorder.none,
                   hintText:
-                      "Try 'bus vara 20 tk' or 'lunch 150' or 'পিয়াজু 50'…",
+                      "Try 'bus vara 20 tk' or 'banana 20 tk apple 30 tk'…",
                   hintStyle: Theme.of(context).textTheme.bodyLarge?.copyWith(
                         color: AppColors.onSurfaceVariant.withValues(alpha: 0.5),
                         fontFamilyFallback: [bengali.fontFamily!],

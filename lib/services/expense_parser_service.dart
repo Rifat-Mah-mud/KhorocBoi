@@ -6,6 +6,9 @@ import '../models/dictionary_entry.dart';
 /// 1) regex amount extraction (always local)
 /// 2) dictionary lookup for item name
 /// 3) AI fallback for unknown terms, then cache
+///
+/// A single line may contain multiple expenses, e.g.
+/// `banana 20 tk apple 30 tk` → two entries (20 + 30).
 class ExpenseParserService {
   ExpenseParserService({
     required DictionaryService dictionary,
@@ -32,12 +35,38 @@ class ExpenseParserService {
     'taka.',
   };
 
+  /// Split one free-form line into segments, one per amount.
+  ///
+  /// Example: `banana 20 tk apple 30 tk`
+  /// → `['banana 20 tk', 'apple 30 tk']`
+  static List<String> splitExpenseSegments(String line) {
+    final trimmed = line.trim();
+    if (trimmed.isEmpty) return const [];
+
+    final matches = amountPattern.allMatches(trimmed).toList();
+    if (matches.isEmpty) return const [];
+
+    final segments = <String>[];
+    for (var i = 0; i < matches.length; i++) {
+      final match = matches[i];
+      final start = i == 0 ? 0 : matches[i - 1].end;
+      final segment = trimmed.substring(start, match.end).trim();
+      if (segment.isEmpty) continue;
+      // Skip orphan amounts with no item text (e.g. trailing " 40").
+      final phrase = extractItemPhrase(segment);
+      if (phrase.isEmpty && i > 0) continue;
+      segments.add(segment);
+    }
+    return segments;
+  }
+
   /// Extract numeric amount from a free-form line. Returns null if none found.
+  /// Prefer the last numeric match within a single segment
+  /// (common: "bus vara 20 tk").
   static double? extractAmount(String line) {
     final matches = amountPattern.allMatches(line);
     if (matches.isEmpty) return null;
 
-    // Prefer the last numeric match (common: "bus vara 20 tk").
     for (final match in matches.toList().reversed) {
       final raw = match.group(1);
       if (raw == null) continue;
@@ -64,9 +93,11 @@ class ExpenseParserService {
     return tokens.join(' ').trim();
   }
 
-  /// Sync parse using local dictionary only (no network).
-  ParsedExpense? parseLineSync(String line, {DateTime? timestamp}) {
-    final trimmed = line.trim();
+  ParsedExpense? _parseSingleSegmentSync(
+    String segment, {
+    DateTime? timestamp,
+  }) {
+    final trimmed = segment.trim();
     if (trimmed.isEmpty) return null;
 
     final amount = extractAmount(trimmed);
@@ -88,6 +119,22 @@ class ExpenseParserService {
       category: category,
       usedAiFallback: false,
     );
+  }
+
+  /// Sync parse of one line (may yield multiple expenses). Dictionary only.
+  List<ParsedExpense> parseLineSync(String line, {DateTime? timestamp}) {
+    final trimmed = line.trim();
+    if (trimmed.isEmpty) return const [];
+
+    final segments = splitExpenseSegments(trimmed);
+    if (segments.isEmpty) return const [];
+
+    final results = <ParsedExpense>[];
+    for (final segment in segments) {
+      final parsed = _parseSingleSegmentSync(segment, timestamp: timestamp);
+      if (parsed != null) results.add(parsed);
+    }
+    return results;
   }
 
   /// Translate tokens greedily (longest phrase first), join English parts.
@@ -139,19 +186,14 @@ class ExpenseParserService {
     );
   }
 
-  /// Async parse with AI fallback for unknown dictionary terms.
-  Future<ParsedExpense?> parseLine(String line, {DateTime? timestamp}) async {
-    final sync = parseLineSync(line, timestamp: timestamp);
-    if (sync == null) return null;
-
-    final phrase = extractItemPhrase(line);
+  Future<ParsedExpense> _enrichWithAi(ParsedExpense sync) async {
+    final phrase = extractItemPhrase(sync.originalText);
     if (phrase.isEmpty) return sync;
 
     final tokens = phrase.split(' ');
     final resolved = _resolveTokens(tokens);
     if (resolved.fullyKnown) return sync;
 
-    // Translate only unknown tokens via AI; keep known ones.
     final parts = <String>[];
     String? category = resolved.category;
     var usedAi = false;
@@ -196,14 +238,28 @@ class ExpenseParserService {
     );
   }
 
-  /// Parse multi-line notes; one expense per non-empty line with an amount.
+  /// Async parse of one line (may yield multiple expenses) with AI fallback.
+  Future<List<ParsedExpense>> parseLine(
+    String line, {
+    DateTime? timestamp,
+  }) async {
+    final syncList = parseLineSync(line, timestamp: timestamp);
+    if (syncList.isEmpty) return const [];
+
+    final results = <ParsedExpense>[];
+    for (final sync in syncList) {
+      results.add(await _enrichWithAi(sync));
+    }
+    return results;
+  }
+
+  /// Parse multi-line notes; supports multiple expenses per line.
   Future<List<ParsedExpense>> parseNotes(String notes) async {
     final lines = notes.split('\n');
     final results = <ParsedExpense>[];
     for (final line in lines) {
       if (line.trim().isEmpty) continue;
-      final parsed = await parseLine(line);
-      if (parsed != null) results.add(parsed);
+      results.addAll(await parseLine(line));
     }
     return results;
   }
@@ -214,8 +270,7 @@ class ExpenseParserService {
     final results = <ParsedExpense>[];
     for (final line in lines) {
       if (line.trim().isEmpty) continue;
-      final parsed = parseLineSync(line);
-      if (parsed != null) results.add(parsed);
+      results.addAll(parseLineSync(line));
     }
     return results;
   }

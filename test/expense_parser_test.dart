@@ -18,6 +18,8 @@ ExpenseParserService buildParser() {
     'cini': const DictionaryEntry(english: 'sugar', category: 'food'),
     'chal': const DictionaryEntry(english: 'rice', category: 'food'),
     'dim': const DictionaryEntry(english: 'egg', category: 'food'),
+    'banana': const DictionaryEntry(english: 'banana', category: 'food'),
+    'apple': const DictionaryEntry(english: 'apple', category: 'food'),
   });
   return ExpenseParserService(
     dictionary: dictionary,
@@ -73,46 +75,81 @@ void main() {
     });
   });
 
+  group('same-line multiple expenses', () {
+    test('splits banana 20 tk apple 30 tk into two segments', () {
+      expect(
+        ExpenseParserService.splitExpenseSegments('banana 20 tk apple 30 tk'),
+        ['banana 20 tk', 'apple 30 tk'],
+      );
+    });
+
+    test('parses both amounts and items on one line', () {
+      final parser = buildParser();
+      final parsed =
+          parser.parseLineSync('banana 20 tk apple 30 tk');
+      expect(parsed.length, 2);
+      expect(parsed.map((e) => e.amount).toList(), [20, 30]);
+      expect(parsed[0].item.toLowerCase(), 'banana');
+      expect(parsed[1].item.toLowerCase(), 'apple');
+      expect(parsed.fold<double>(0, (s, e) => s + e.amount), 50);
+    });
+
+    test('parses mixed single-line multi without currency on second', () {
+      final parser = buildParser();
+      final parsed = parser.parseLineSync('cha 10 tk dim 40');
+      expect(parsed.length, 2);
+      expect(parsed.map((e) => e.amount).toList(), [10, 40]);
+    });
+
+    test('single expense line still returns one entry', () {
+      final parser = buildParser();
+      final parsed = parser.parseLineSync('bus vara 20 tk');
+      expect(parsed.length, 1);
+      expect(parsed.first.amount, 20);
+    });
+  });
+
   group('dictionary lookup parse', () {
     test('maps bus vara → Bus Fare', () {
       final parser = buildParser();
       final parsed = parser.parseLineSync('bus vara 20 tk');
-      expect(parsed, isNotNull);
-      expect(parsed!.amount, 20);
-      expect(parsed.originalText, 'bus vara 20 tk');
-      expect(parsed.item.toLowerCase(), 'bus fare');
-      expect(parsed.category, 'transport');
+      expect(parsed, isNotEmpty);
+      expect(parsed.first.amount, 20);
+      expect(parsed.first.originalText, 'bus vara 20 tk');
+      expect(parsed.first.item.toLowerCase(), 'bus fare');
+      expect(parsed.first.category, 'transport');
     });
 
     test('maps piyara → Guava', () {
       final parser = buildParser();
       final parsed = parser.parseLineSync('piyara 50');
-      expect(parsed!.item.toLowerCase(), 'guava');
-      expect(parsed.amount, 50);
-      expect(parsed.category, 'food');
+      expect(parsed.first.item.toLowerCase(), 'guava');
+      expect(parsed.first.amount, 50);
+      expect(parsed.first.category, 'food');
     });
 
     test('maps piyaju → Lentil Fritters', () {
       final parser = buildParser();
       final parsed = parser.parseLineSync('piyaju 50 tk');
-      expect(parsed!.item.toLowerCase(), 'lentil fritters');
-      expect(parsed.category, 'snacks');
+      expect(parsed.first.item.toLowerCase(), 'lentil fritters');
+      expect(parsed.first.amount, 50);
+      expect(parsed.first.category, 'snacks');
     });
 
     test('maps cng vara → CNG Fare', () {
       final parser = buildParser();
       final parsed = parser.parseLineSync('cng vara 50');
-      expect(parsed!.amount, 50);
-      expect(parsed.item.toLowerCase(), 'cng fare');
-      expect(parsed.category, 'transport');
+      expect(parsed.first.amount, 50);
+      expect(parsed.first.item.toLowerCase(), 'cng fare');
+      expect(parsed.first.category, 'transport');
     });
 
     test('unknown word keeps title-cased phrase without blocking', () {
       final parser = buildParser();
       final parsed = parser.parseLineSync('xyzabc 40 tk');
-      expect(parsed!.amount, 40);
-      expect(parsed.item.toLowerCase(), 'xyzabc');
-      expect(parsed.originalText, 'xyzabc 40 tk');
+      expect(parsed.first.amount, 40);
+      expect(parsed.first.item.toLowerCase(), 'xyzabc');
+      expect(parsed.first.originalText, 'xyzabc 40 tk');
     });
   });
 
@@ -123,6 +160,15 @@ void main() {
       final results = parser.parseNotesSync(notes);
       expect(results.length, 3);
       expect(results.map((e) => e.amount).toList(), [20, 50, 50]);
+    });
+
+    test('parses multi-item line plus other lines', () {
+      final parser = buildParser();
+      const notes = 'banana 20 tk apple 30 tk\ncng 50';
+      final results = parser.parseNotesSync(notes);
+      expect(results.length, 3);
+      expect(results.map((e) => e.amount).toList(), [20, 30, 50]);
+      expect(results.fold<double>(0, (s, e) => s + e.amount), 100);
     });
   });
 }

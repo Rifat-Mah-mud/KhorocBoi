@@ -8,9 +8,11 @@ Personal expense tracker with natural-language Bangla / English / Banglish input
 ## Features
 
 - Free-form daily notes → auto-parsed expenses (`bus vara 20 tk`)
+- Multiple items on one line (`banana 20 tk apple 30 tk` → ৳50)
 - Local dictionary + regex amount extraction (offline-first)
 - Optional free AI fallback (Groq) for unknown words, cached locally
 - Home, daily tab, drawer history, analytics charts
+- Google Sign-In + Drive app-data backup (daily sync over Wi‑Fi/data)
 - Light / dark mode, Bangla-capable fonts (Noto Sans Bengali)
 
 ## Quick start (after tooling is installed)
@@ -36,7 +38,27 @@ Get a key at: https://console.groq.com/keys
 
 Without a key, the app still works offline using the dictionary.
 
+## Google Backup (Drive)
+
+History lives on-device first. Optional Google Sign-In syncs a private JSON backup into Drive’s **appDataFolder** (hidden from the normal Drive UI).
+
+1. In [Google Cloud Console](https://console.cloud.google.com/): create a project, enable **Google Drive API**.
+2. Create OAuth clients:
+   - **Web** application → copy the client ID into `ApiConfig.googleWebClientId`
+   - **Android** application → package `com.khoroboi.khoroboi` + your debug/release **SHA-1**
+3. In the app: drawer → **Google Backup** → Sign in once
+
+After that, backups upload automatically whenever notes change (or you delete history). Reinstall + same Gmail restores everything exactly.
+
 ## Android force update (GitHub Releases)
+
+Force update only appears when GitHub’s **latest release tag is newer** than the installed app.
+
+- Current GitHub latest: check `https://github.com/Rifat-Mah-mud/KhorocBoi/releases/latest`
+- App version comes from `pubspec.yaml` (`version: X.Y.Z+build`)
+- If both are `1.0.1`, the update screen will **not** show (nothing newer)
+
+To ship an update: bump `version` (e.g. `1.0.2+2`), build the release APK, publish GitHub release tag `v1.0.2` with the APK attached. Tags may also use build form `v1.0.1+2`.
 
 On **Android sideload APKs**, the app checks GitHub’s latest release after startup. If the release tag is newer than `pubspec.yaml` `version`, the UI is replaced with a mandatory update screen (download APK → system installer). Offline or API errors **fail open** — the app keeps working.
 

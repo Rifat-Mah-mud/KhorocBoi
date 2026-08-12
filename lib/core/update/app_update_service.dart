@@ -16,29 +16,51 @@ class AppUpdateService {
       : _dio = dio ??
             Dio(
               BaseOptions(
-                connectTimeout: const Duration(seconds: 8),
-                receiveTimeout: const Duration(seconds: 8),
-                sendTimeout: const Duration(seconds: 8),
+                connectTimeout: const Duration(seconds: 15),
+                receiveTimeout: const Duration(seconds: 20),
+                sendTimeout: const Duration(seconds: 15),
               ),
             );
 
   final Dio _dio;
 
   /// Semantic compare: [latest] > [current].
+  /// Supports optional build suffixes: `1.0.1+2`.
   static bool isNewerVersion(String latest, String current) {
-    final latestParts = _parseVersion(latest);
-    final currentParts = _parseVersion(current);
-    final length = latestParts.length > currentParts.length
-        ? latestParts.length
-        : currentParts.length;
+    final latestParts = _splitVersionAndBuild(latest);
+    final currentParts = _splitVersionAndBuild(current);
 
-    for (var i = 0; i < length; i++) {
-      final l = i < latestParts.length ? latestParts[i] : 0;
-      final c = i < currentParts.length ? currentParts[i] : 0;
-      if (l > c) return true;
-      if (l < c) return false;
+    final versionCmp = _compareDotParts(latestParts.version, currentParts.version);
+    if (versionCmp != 0) return versionCmp > 0;
+
+    // Same X.Y.Z — newer if build number is higher (when provided).
+    if (latestParts.build != null && currentParts.build != null) {
+      return latestParts.build! > currentParts.build!;
+    }
+    if (latestParts.build != null && currentParts.build == null) {
+      return latestParts.build! > 0;
     }
     return false;
+  }
+
+  static ({List<int> version, int? build}) _splitVersionAndBuild(String raw) {
+    final cleaned = raw.trim().replaceFirst(RegExp(r'^v', caseSensitive: false), '');
+    final plus = cleaned.split('+');
+    final version = _parseVersion(plus.first);
+    final build = plus.length > 1 ? int.tryParse(plus[1].trim()) : null;
+    return (version: version, build: build);
+  }
+
+  static int _compareDotParts(List<int> latest, List<int> current) {
+    final length =
+        latest.length > current.length ? latest.length : current.length;
+    for (var i = 0; i < length; i++) {
+      final l = i < latest.length ? latest[i] : 0;
+      final c = i < current.length ? current[i] : 0;
+      if (l > c) return 1;
+      if (l < c) return -1;
+    }
+    return 0;
   }
 
   static List<int> _parseVersion(String version) {
@@ -54,7 +76,7 @@ class AppUpdateService {
     if (kIsWeb || !Platform.isAndroid) return null;
 
     try {
-      return await _checkForUpdate().timeout(const Duration(seconds: 10));
+      return await _checkForUpdate().timeout(const Duration(seconds: 20));
     } catch (error) {
       debugPrint('App update check failed: $error');
       return null;
@@ -63,7 +85,10 @@ class AppUpdateService {
 
   Future<AppUpdateInfo?> _checkForUpdate() async {
     final packageInfo = await PackageInfo.fromPlatform();
-    final currentVersion = packageInfo.version;
+    // Compare name (+ optional build from tag). Installed build used when tag has +N.
+    final currentVersion = packageInfo.buildNumber.isNotEmpty
+        ? '${packageInfo.version}+${packageInfo.buildNumber}'
+        : packageInfo.version;
 
     final response = await _dio.get<dynamic>(
       ReleaseConfig.githubLatestReleaseApi,
@@ -90,6 +115,9 @@ class AppUpdateService {
     final latestVersion =
         tagName.replaceFirst(RegExp(r'^v', caseSensitive: false), '');
     if (!isNewerVersion(latestVersion, currentVersion)) {
+      debugPrint(
+        'App update not needed: installed=$currentVersion latest=$latestVersion',
+      );
       return null;
     }
 
@@ -122,7 +150,7 @@ class AppUpdateService {
 
     return AppUpdateInfo(
       latestVersion: latestVersion,
-      currentVersion: currentVersion,
+      currentVersion: packageInfo.version,
       apkDownloadUrl: downloadUrl,
       apkFileName: (fileName == null || fileName.isEmpty)
           ? 'khorocboi_update.apk'
@@ -140,7 +168,7 @@ class AppUpdateService {
     final dir = await getTemporaryDirectory();
     final path = p.join(dir.path, update.apkFileName);
 
-    await _dio.download(
+    final response = await _dio.download(
       update.apkDownloadUrl,
       path,
       cancelToken: cancelToken,
@@ -150,7 +178,8 @@ class AppUpdateService {
           'User-Agent': 'KhorocBoi-Android',
         },
         followRedirects: true,
-        receiveTimeout: const Duration(minutes: 5),
+        maxRedirects: 5,
+        receiveTimeout: const Duration(minutes: 10),
         validateStatus: (status) => status != null && status < 500,
       ),
       onReceiveProgress: (received, total) {
@@ -161,6 +190,16 @@ class AppUpdateService {
         onProgress?.call((received / total).clamp(0.0, 1.0));
       },
     );
+
+    final code = response.statusCode ?? 0;
+    if (code != 200 && code != 206) {
+      throw StateError('APK download failed (HTTP $code).');
+    }
+
+    final file = File(path);
+    if (!await file.exists() || await file.length() < 1024) {
+      throw StateError('Downloaded APK is missing or too small.');
+    }
 
     return path;
   }

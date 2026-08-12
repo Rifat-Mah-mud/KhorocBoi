@@ -1,7 +1,7 @@
 name: khoroboi
 description: KhorocBoi — personal expense tracker with Bangla/English/Banglish natural-language input.
 publish_to: "none"
-version: 1.0.1+1
+version: 1.1.0+1
 
 environment:
   sdk: ">=3.3.0 <4.0.0"
@@ -25,6 +25,11 @@ dependencies:
   open_filex: ^4.7.0
   permission_handler: ^11.4.0
   path: ^1.9.1
+  google_sign_in: ^7.2.0
+  googleapis: ^16.0.0
+  extension_google_sign_in_as_googleapis_auth: ^3.0.0
+  shared_preferences: ^2.5.5
+  connectivity_plus: ^7.3.1
 
 dev_dependencies:
   flutter_test:

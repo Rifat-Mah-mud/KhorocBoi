@@ -9,10 +9,12 @@ class DailyTabListTile extends StatelessWidget {
     super.key,
     required this.tab,
     required this.onTap,
+    this.onDelete,
   });
 
   final DailyTab tab;
   final VoidCallback onTap;
+  final VoidCallback? onDelete;
 
   @override
   Widget build(BuildContext context) {
@@ -77,6 +79,17 @@ class DailyTabListTile extends StatelessWidget {
                       fontWeight: FontWeight.w600,
                     ),
               ),
+              if (onDelete != null) ...[
+                const SizedBox(width: 4),
+                IconButton(
+                  tooltip: 'Delete',
+                  onPressed: onDelete,
+                  icon: Icon(
+                    Icons.delete_outline,
+                    color: AppColors.error.withValues(alpha: 0.85),
+                  ),
+                ),
+              ],
             ],
           ),
         ),

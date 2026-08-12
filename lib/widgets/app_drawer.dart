@@ -5,6 +5,7 @@ import 'package:intl/intl.dart';
 import '../models/daily_tab.dart';
 import '../providers/app_providers.dart';
 import '../screens/analytics_screen.dart';
+import '../screens/backup_screen.dart';
 import '../screens/daily_tab_screen.dart';
 import '../theme/app_brand.dart';
 import '../theme/app_theme.dart';
@@ -115,6 +116,27 @@ class _AppDrawerState extends ConsumerState<AppDrawer> {
               ),
             ),
             Padding(
+              padding: const EdgeInsets.fromLTRB(12, 0, 12, 8),
+              child: ListTile(
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                leading: const Icon(Icons.cloud_sync_outlined),
+                title: const Text('Google Backup'),
+                subtitle: Text(
+                  ref.watch(backupStateProvider).isSignedIn
+                      ? 'Signed in · sync history'
+                      : 'Sign in to sync history',
+                ),
+                onTap: () {
+                  Navigator.pop(context);
+                  Navigator.of(context).push(
+                    MaterialPageRoute(builder: (_) => const BackupScreen()),
+                  );
+                },
+              ),
+            ),
+            Padding(
               padding: const EdgeInsets.fromLTRB(12, 4, 12, 8),
               child: TextField(
                 controller: _searchController,
@@ -172,6 +194,46 @@ class _AppDrawerState extends ConsumerState<AppDrawer> {
                               title: Text(dateFmt.format(tab.date)),
                               subtitle: Text(
                                 '${tab.transactionCount} items · ৳ ${NumberFormat('#,##0').format(tab.total)}',
+                              ),
+                              trailing: IconButton(
+                                tooltip: 'Delete',
+                                icon: Icon(
+                                  Icons.delete_outline,
+                                  color: AppColors.error.withValues(alpha: 0.85),
+                                ),
+                                onPressed: () async {
+                                  final label =
+                                      DateFormat('d MMM yyyy').format(tab.date);
+                                  final confirmed = await showDialog<bool>(
+                                    context: context,
+                                    builder: (ctx) => AlertDialog(
+                                      title: const Text('Delete history?'),
+                                      content: Text(
+                                        'Delete all notes and expenses for $label?',
+                                      ),
+                                      actions: [
+                                        TextButton(
+                                          onPressed: () =>
+                                              Navigator.of(ctx).pop(false),
+                                          child: const Text('No'),
+                                        ),
+                                        FilledButton(
+                                          style: FilledButton.styleFrom(
+                                            backgroundColor: AppColors.error,
+                                            foregroundColor: Colors.white,
+                                          ),
+                                          onPressed: () =>
+                                              Navigator.of(ctx).pop(true),
+                                          child: const Text('Yes'),
+                                        ),
+                                      ],
+                                    ),
+                                  );
+                                  if (confirmed != true) return;
+                                  await ref
+                                      .read(tabControllerProvider.notifier)
+                                      .deleteTab(tab.id);
+                                },
                               ),
                               onTap: () {
                                 Navigator.pop(context);

@@ -108,4 +108,76 @@ class StorageService {
 
   String _dateKey(DateTime d) =>
       '${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
+
+  /// Full local snapshot for cloud backup.
+  Map<String, dynamic> exportBackup() {
+    return {
+      'version': 1,
+      'exportedAt': DateTime.now().toIso8601String(),
+      'tabs': getAllTabs().map((t) => t.toJson()).toList(),
+    };
+  }
+
+  bool get hasAnyTabs => _tabsBox.isNotEmpty;
+
+  /// Exact restore — clears local tabs and writes cloud snapshot as-is.
+  Future<void> replaceAllFromBackup(Map<String, dynamic> backup) async {
+    final rawTabs = backup['tabs'] as List<dynamic>? ?? const [];
+    final cloudTabs = rawTabs
+        .map((e) => DailyTab.fromJson(e as Map<String, dynamic>))
+        .toList();
+
+    await _tabsBox.clear();
+    for (final tab in cloudTabs) {
+      await _tabsBox.put(tab.id, tab);
+    }
+  }
+
+  /// Merge cloud tabs with local by calendar date.
+  /// Prefer the richer notes text when both sides have the same day.
+  Future<int> mergeFromBackup(Map<String, dynamic> backup) async {
+    final rawTabs = backup['tabs'] as List<dynamic>? ?? const [];
+    final cloudTabs = rawTabs
+        .map((e) => DailyTab.fromJson(e as Map<String, dynamic>))
+        .toList();
+
+    final byDate = <String, DailyTab>{};
+    for (final tab in getAllTabs()) {
+      byDate[_dateKey(tab.dateOnly)] = tab;
+    }
+
+    var changed = 0;
+    for (final cloud in cloudTabs) {
+      final key = _dateKey(cloud.dateOnly);
+      final local = byDate[key];
+      if (local == null) {
+        await _tabsBox.put(cloud.id, cloud);
+        byDate[key] = cloud;
+        changed++;
+        continue;
+      }
+
+      final preferCloud = _isRicher(cloud, local);
+      if (!preferCloud) continue;
+
+      final merged = local.copyWith(
+        notesText: cloud.notesText,
+        entries: cloud.entries,
+      );
+      await _tabsBox.put(local.id, merged);
+      byDate[key] = merged;
+      changed++;
+    }
+    return changed;
+  }
+
+  bool _isRicher(DailyTab a, DailyTab b) {
+    if (a.notesText.length != b.notesText.length) {
+      return a.notesText.length > b.notesText.length;
+    }
+    if (a.entries.length != b.entries.length) {
+      return a.entries.length > b.entries.length;
+    }
+    return a.total > b.total;
+  }
 }

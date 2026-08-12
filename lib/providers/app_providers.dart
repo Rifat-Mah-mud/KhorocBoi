@@ -7,6 +7,7 @@ import '../core/update/app_update_service.dart';
 import '../services/ai_service.dart';
 import '../services/dictionary_service.dart';
 import '../services/expense_parser_service.dart';
+import '../services/google_backup_service.dart';
 import '../services/storage_service.dart';
 
 final dictionaryServiceProvider = Provider<DictionaryService>((ref) {
@@ -23,6 +24,21 @@ final appUpdateServiceProvider = Provider<AppUpdateService>((ref) {
 
 final storageServiceProvider = Provider<StorageService>((ref) {
   throw UnimplementedError('Override in main()');
+});
+
+final googleBackupServiceProvider = Provider<GoogleBackupService>((ref) {
+  throw UnimplementedError('Override in main()');
+});
+
+final _backupStateStreamProvider = StreamProvider<BackupState>((ref) {
+  return ref.watch(googleBackupServiceProvider).stateStream;
+});
+
+/// Latest backup/sign-in state for UI.
+final backupStateProvider = Provider<BackupState>((ref) {
+  final async = ref.watch(_backupStateStreamProvider);
+  return async.asData?.value ??
+      ref.watch(googleBackupServiceProvider).state;
 });
 
 final parserServiceProvider = Provider<ExpenseParserService>((ref) {
@@ -113,6 +129,7 @@ class TabControllerNotifier extends StateNotifier<AsyncValue<void>> {
 
   StorageService get _storage => ref.read(storageServiceProvider);
   ExpenseParserService get _parser => ref.read(parserServiceProvider);
+  GoogleBackupService get _backup => ref.read(googleBackupServiceProvider);
 
   void _bump() {
     ref.read(tabsVersionProvider.notifier).state++;
@@ -128,6 +145,12 @@ class TabControllerNotifier extends StateNotifier<AsyncValue<void>> {
     final tab = await _storage.createTabForDate(date);
     _bump();
     return tab;
+  }
+
+  Future<void> deleteTab(String tabId) async {
+    await _storage.deleteTab(tabId);
+    _bump();
+    _backup.scheduleUploadAfterEdit();
   }
 
   /// Debounced auto-save: sync parse for UI speed, then AI enrich unknown terms.
@@ -178,6 +201,7 @@ class TabControllerNotifier extends StateNotifier<AsyncValue<void>> {
         entries: entries,
       );
       _bump();
+      _backup.scheduleUploadAfterEdit();
       state = const AsyncData(null);
     } catch (e, st) {
       state = AsyncError(e, st);

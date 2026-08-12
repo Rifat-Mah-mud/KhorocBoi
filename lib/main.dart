@@ -4,12 +4,12 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'core/update/app_update_info.dart';
-import 'core/update/app_update_service.dart';
 import 'core/update/force_update_page.dart';
 import 'providers/app_providers.dart';
 import 'screens/home_screen.dart';
 import 'services/ai_service.dart';
 import 'services/dictionary_service.dart';
+import 'services/google_backup_service.dart';
 import 'services/storage_service.dart';
 import 'theme/app_brand.dart';
 import 'theme/app_theme.dart';
@@ -26,12 +26,16 @@ Future<void> main() async {
   final ai = AiService();
   await ai.init();
 
+  final backup = GoogleBackupService(storage);
+  await backup.init();
+
   runApp(
     ProviderScope(
       overrides: [
         storageServiceProvider.overrideWithValue(storage),
         dictionaryServiceProvider.overrideWithValue(dictionary),
         aiServiceProvider.overrideWithValue(ai),
+        googleBackupServiceProvider.overrideWithValue(backup),
       ],
       child: const KhorocboiApp(),
     ),
@@ -53,6 +57,7 @@ class _KhorocboiAppState extends ConsumerState<KhorocboiApp> {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       unawaited(_checkForForceUpdate());
+      unawaited(_autoBackupSync());
     });
   }
 
@@ -63,6 +68,16 @@ class _KhorocboiAppState extends ConsumerState<KhorocboiApp> {
       setState(() => _pendingUpdate = update);
     } catch (error) {
       debugPrint('Force update gate failed: $error');
+    }
+  }
+
+  Future<void> _autoBackupSync() async {
+    try {
+      await ref.read(googleBackupServiceProvider).maybeAutoSync();
+      if (!mounted) return;
+      ref.read(tabsVersionProvider.notifier).state++;
+    } catch (error) {
+      debugPrint('Auto backup sync failed: $error');
     }
   }
 

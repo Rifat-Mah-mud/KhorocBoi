@@ -14,5 +14,12 @@ void main() {
       expect(AppUpdateService.isNewerVersion('1.0.0', '1.0.1'), isFalse);
       expect(AppUpdateService.isNewerVersion('1.9.0', '1.10.0'), isFalse);
     });
+
+    test('compares build numbers when version name matches', () {
+      expect(AppUpdateService.isNewerVersion('1.0.1+2', '1.0.1+1'), isTrue);
+      expect(AppUpdateService.isNewerVersion('1.0.1+1', '1.0.1+1'), isFalse);
+      expect(AppUpdateService.isNewerVersion('1.0.1+1', '1.0.1+2'), isFalse);
+      expect(AppUpdateService.isNewerVersion('v1.0.2', '1.0.1+9'), isTrue);
+    });
   });
 }

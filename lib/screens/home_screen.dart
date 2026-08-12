@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:intl/intl.dart';
 
 import '../providers/app_providers.dart';
 import '../theme/app_brand.dart';
@@ -22,10 +23,51 @@ class HomeScreen extends ConsumerWidget {
     );
   }
 
+  Future<void> _confirmDelete(
+    BuildContext context,
+    WidgetRef ref,
+    String tabId,
+    DateTime date,
+  ) async {
+    final label = DateFormat('MMMM d, yyyy').format(date);
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Delete history?'),
+        content: Text(
+          'Delete all notes and expenses for $label? This cannot be undone.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: const Text('No'),
+          ),
+          FilledButton(
+            style: FilledButton.styleFrom(
+              backgroundColor: AppColors.error,
+              foregroundColor: Colors.white,
+            ),
+            onPressed: () => Navigator.of(ctx).pop(true),
+            child: const Text('Yes'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+    await ref.read(tabControllerProvider.notifier).deleteTab(tabId);
+  }
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final tabs = ref.watch(tabsProvider);
     final monthTotal = ref.watch(monthTotalProvider);
+
+    // Refresh list when Google restore changes local data.
+    ref.listen(backupStateProvider, (prev, next) {
+      if (prev?.dataRevision != next.dataRevision) {
+        ref.read(tabsVersionProvider.notifier).state++;
+      }
+    });
 
     return Scaffold(
       drawer: const AppDrawer(),
@@ -137,6 +179,12 @@ class HomeScreen extends ConsumerWidget {
                           ),
                         );
                       },
+                      onDelete: () => _confirmDelete(
+                        context,
+                        ref,
+                        tab.id,
+                        tab.date,
+                      ),
                     );
                   },
                 ),
