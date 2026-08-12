@@ -175,11 +175,37 @@ class GoogleBackupService {
       await _signIn.authenticate();
       // Auth event listener triggers syncNow.
       _emit(_state.copyWith(status: BackupSyncStatus.idle));
-    } catch (e) {
+    } on GoogleSignInException catch (e) {
+      if (e.code == GoogleSignInExceptionCode.canceled) {
+        _emit(
+          _state.copyWith(
+            status: BackupSyncStatus.idle,
+            clearMessage: true,
+          ),
+        );
+        return;
+      }
       _emit(
         _state.copyWith(
           status: BackupSyncStatus.error,
-          message: 'Sign-in failed: $e',
+          message: 'Sign-in failed. Please try again.',
+        ),
+      );
+    } catch (e) {
+      final text = e.toString().toLowerCase();
+      if (text.contains('cancel')) {
+        _emit(
+          _state.copyWith(
+            status: BackupSyncStatus.idle,
+            clearMessage: true,
+          ),
+        );
+        return;
+      }
+      _emit(
+        _state.copyWith(
+          status: BackupSyncStatus.error,
+          message: 'Sign-in failed. Please try again.',
         ),
       );
     }
