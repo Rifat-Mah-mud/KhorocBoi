@@ -12,7 +12,7 @@ Personal expense tracker with natural-language Bangla / English / Banglish input
 - Local dictionary + regex amount extraction (offline-first)
 - Optional free AI fallback (Groq) for unknown words, cached locally
 - Home, daily tab, drawer history, analytics charts
-- Google Sign-In + Drive app-data backup (daily sync over Wi‑Fi/data)
+- Email + passcode cloud backup (auto-sync after every change)
 - Light / dark mode, Bangla-capable fonts (Noto Sans Bengali)
 
 ## Quick start (after tooling is installed)
@@ -38,17 +38,14 @@ Get a key at: https://console.groq.com/keys
 
 Without a key, the app still works offline using the dictionary.
 
-## Google Backup (Drive)
+## Cloud Sync (email + passcode)
 
-History lives on-device first. Optional Google Sign-In syncs a private JSON backup into Drive’s **appDataFolder** (hidden from the normal Drive UI).
+History lives on-device first. Optional cloud sync saves a JSON snapshot to `khorocboi-server`.
 
-1. In [Google Cloud Console](https://console.cloud.google.com/): create a project, enable **Google Drive API**.
-2. Create OAuth clients:
-   - **Web** application → copy the client ID into `ApiConfig.googleWebClientId`
-   - **Android** application → package `com.khoroboi.khoroboi` + your debug/release **SHA-1**
-3. In the app: drawer → **Google Backup** → Sign in once
+1. Deploy `khorocboi-server` (Vercel + Upstash Redis) and copy the URL into `ApiConfig.syncServerUrl`.
+2. In the app: drawer → **Cloud Sync** → enter email + a passcode (at least 4 digits) → **Save & sync**.
 
-After that, backups upload automatically whenever notes change (or you delete history). Reinstall + same Gmail restores everything exactly.
+After that, backups upload automatically whenever notes change (or you delete history). Reinstall + the same email and passcode restores everything.
 
 ## Android force update (GitHub Releases)
 

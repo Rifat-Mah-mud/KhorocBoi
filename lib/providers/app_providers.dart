@@ -7,7 +7,7 @@ import '../core/update/app_update_service.dart';
 import '../services/ai_service.dart';
 import '../services/dictionary_service.dart';
 import '../services/expense_parser_service.dart';
-import '../services/google_backup_service.dart';
+import '../services/cloud_sync_service.dart';
 import '../services/storage_service.dart';
 
 final dictionaryServiceProvider = Provider<DictionaryService>((ref) {
@@ -26,19 +26,19 @@ final storageServiceProvider = Provider<StorageService>((ref) {
   throw UnimplementedError('Override in main()');
 });
 
-final googleBackupServiceProvider = Provider<GoogleBackupService>((ref) {
+final cloudSyncServiceProvider = Provider<CloudSyncService>((ref) {
   throw UnimplementedError('Override in main()');
 });
 
 final _backupStateStreamProvider = StreamProvider<BackupState>((ref) {
-  return ref.watch(googleBackupServiceProvider).stateStream;
+  return ref.watch(cloudSyncServiceProvider).stateStream;
 });
 
-/// Latest backup/sign-in state for UI.
+/// Latest backup/connect state for UI.
 final backupStateProvider = Provider<BackupState>((ref) {
   final async = ref.watch(_backupStateStreamProvider);
   return async.asData?.value ??
-      ref.watch(googleBackupServiceProvider).state;
+      ref.watch(cloudSyncServiceProvider).state;
 });
 
 final parserServiceProvider = Provider<ExpenseParserService>((ref) {
@@ -129,7 +129,7 @@ class TabControllerNotifier extends StateNotifier<AsyncValue<void>> {
 
   StorageService get _storage => ref.read(storageServiceProvider);
   ExpenseParserService get _parser => ref.read(parserServiceProvider);
-  GoogleBackupService get _backup => ref.read(googleBackupServiceProvider);
+  CloudSyncService get _backup => ref.read(cloudSyncServiceProvider);
 
   void _bump() {
     ref.read(tabsVersionProvider.notifier).state++;

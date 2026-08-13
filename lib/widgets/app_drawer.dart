@@ -121,11 +121,11 @@ class _AppDrawerState extends ConsumerState<AppDrawer> {
                   borderRadius: BorderRadius.circular(12),
                 ),
                 leading: const Icon(Icons.cloud_sync_outlined),
-                title: const Text('Google Backup'),
+                title: const Text('Cloud Sync'),
                 subtitle: Text(
-                  ref.watch(backupStateProvider).isSignedIn
-                      ? 'Signed in · sync history'
-                      : 'Sign in to sync history',
+                  ref.watch(backupStateProvider).isConnected
+                      ? 'Connected · sync history'
+                      : 'Set email to sync history',
                 ),
                 onTap: () {
                   Navigator.pop(context);

@@ -7,8 +7,7 @@ class ApiConfig {
   static const String groqApiKey =
       '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';
 
-  /// Google Cloud **Web** OAuth client ID (Android `serverClientId`).
-  /// Leave placeholder until you create credentials — backup UI will explain.
-  static const String googleWebClientId =
-      '285448988371-su4lunj71mfih3u1rlccp5b9t1nlhppc.apps.googleusercontent.com';
+  /// Deployed khorocboi-server URL (no trailing slash).
+  /// After you deploy the server to Vercel, paste that URL here.
+  static const String syncServerUrl = 'khorocboi-server-6kl2f6jfc-rifatwork2nd-3878s-projects.vercel.app';
 }
