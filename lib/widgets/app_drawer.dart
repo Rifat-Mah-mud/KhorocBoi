@@ -4,6 +4,7 @@ import 'package:intl/intl.dart';
 
 import '../models/daily_tab.dart';
 import '../providers/app_providers.dart';
+import '../providers/theme_provider.dart';
 import '../screens/analytics_screen.dart';
 import '../screens/backup_screen.dart';
 import '../screens/daily_tab_screen.dart';
@@ -54,7 +55,7 @@ class _AppDrawerState extends ConsumerState<AppDrawer> {
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             Padding(
-              padding: const EdgeInsets.fromLTRB(20, 16, 20, 12),
+              padding: const EdgeInsets.fromLTRB(20, 16, 8, 12),
               child: Row(
                 children: [
                   const AppLogo(size: 44),
@@ -62,6 +63,8 @@ class _AppDrawerState extends ConsumerState<AppDrawer> {
                   Expanded(
                     child: Text(
                       AppBrand.workspaceTitle,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                       style:
                           Theme.of(context).textTheme.headlineSmall?.copyWith(
                                 color: AppColors.lushGreen,
@@ -69,6 +72,7 @@ class _AppDrawerState extends ConsumerState<AppDrawer> {
                               ),
                     ),
                   ),
+                  const _ThemeModeToggle(),
                 ],
               ),
             ),
@@ -282,6 +286,90 @@ class _AppDrawerState extends ConsumerState<AppDrawer> {
               child: DevelopedByLabel(compact: true),
             ),
           ],
+        ),
+      ),
+    );
+  }
+}
+
+class _ThemeModeToggle extends ConsumerWidget {
+  const _ThemeModeToggle();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final scheme = Theme.of(context).colorScheme;
+
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: isDark ? AppColors.darkSurfaceLowest : Colors.white,
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(
+          color: AppColors.lushBorder.withValues(alpha: isDark ? 0.4 : 1),
+        ),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          _ThemeIconButton(
+            icon: Icons.light_mode_outlined,
+            tooltip: 'Light mode',
+            selected: !isDark,
+            selectedColor: AppColors.lushGreen,
+            onPressed: () => ref
+                .read(themeModeProvider.notifier)
+                .setMode(ThemeMode.light),
+          ),
+          _ThemeIconButton(
+            icon: Icons.dark_mode_outlined,
+            tooltip: 'Dark mode',
+            selected: isDark,
+            selectedColor: scheme.primary,
+            onPressed: () =>
+                ref.read(themeModeProvider.notifier).setMode(ThemeMode.dark),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ThemeIconButton extends StatelessWidget {
+  const _ThemeIconButton({
+    required this.icon,
+    required this.tooltip,
+    required this.selected,
+    required this.selectedColor,
+    required this.onPressed,
+  });
+
+  final IconData icon;
+  final String tooltip;
+  final bool selected;
+  final Color selectedColor;
+  final VoidCallback onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    return Tooltip(
+      message: tooltip,
+      child: Material(
+        color: selected ? selectedColor.withValues(alpha: 0.16) : Colors.transparent,
+        shape: const CircleBorder(),
+        child: InkWell(
+          customBorder: const CircleBorder(),
+          onTap: onPressed,
+          child: SizedBox(
+            width: 40,
+            height: 40,
+            child: Icon(
+              icon,
+              size: 20,
+              color: selected
+                  ? selectedColor
+                  : Theme.of(context).colorScheme.onSurfaceVariant,
+            ),
+          ),
         ),
       ),
     );

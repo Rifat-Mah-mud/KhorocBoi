@@ -2,10 +2,12 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import 'core/update/app_update_info.dart';
 import 'core/update/force_update_page.dart';
 import 'providers/app_providers.dart';
+import 'providers/theme_provider.dart';
 import 'screens/home_screen.dart';
 import 'services/ai_service.dart';
 import 'services/dictionary_service.dart';
@@ -29,6 +31,8 @@ Future<void> main() async {
   final backup = CloudSyncService(storage);
   await backup.init();
 
+  final prefs = await SharedPreferences.getInstance();
+
   runApp(
     ProviderScope(
       overrides: [
@@ -36,6 +40,7 @@ Future<void> main() async {
         dictionaryServiceProvider.overrideWithValue(dictionary),
         aiServiceProvider.overrideWithValue(ai),
         cloudSyncServiceProvider.overrideWithValue(backup),
+        sharedPreferencesProvider.overrideWithValue(prefs),
       ],
       child: const KhorocboiApp(),
     ),
@@ -88,7 +93,7 @@ class _KhorocboiAppState extends ConsumerState<KhorocboiApp> {
       debugShowCheckedModeBanner: false,
       theme: AppTheme.light(),
       darkTheme: AppTheme.dark(),
-      themeMode: ThemeMode.system,
+      themeMode: ref.watch(themeModeProvider),
       home: const HomeScreen(),
       builder: (context, child) {
         final pending = _pendingUpdate;

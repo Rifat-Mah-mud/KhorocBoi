@@ -148,7 +148,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
             Text(
               AppBrand.name,
               style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-                    color: AppColors.primary,
+                    color: Theme.of(context).appBarTheme.foregroundColor ??
+                        AppColors.primary,
                     fontWeight: FontWeight.w700,
                   ),
             ),
