@@ -86,9 +86,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('Delete history?'),
+        title: const Text('Move to recycle bin?'),
         content: Text(
-          'Delete all notes and expenses for $label? This cannot be undone.',
+          'Move all notes and expenses for $label to recycle bin for 30 days?',
         ),
         actions: [
           TextButton(
@@ -101,7 +101,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
               foregroundColor: Colors.white,
             ),
             onPressed: () => Navigator.of(ctx).pop(true),
-            child: const Text('Yes'),
+            child: const Text('Move'),
           ),
         ],
       ),

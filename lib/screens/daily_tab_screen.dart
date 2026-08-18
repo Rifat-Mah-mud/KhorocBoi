@@ -88,10 +88,23 @@ class _DailyTabScreenState extends ConsumerState<DailyTabScreen>
   Future<void> _saveTitleNow() async {
     if (_leaving) return;
     _titleDebounce?.cancel();
-    await ref.read(tabControllerProvider.notifier).saveTabTitle(
+    final savedTitle = await ref.read(tabControllerProvider.notifier).saveTabTitle(
           tabId: widget.tabId,
           customTitle: _titleController.text,
         );
+    final entered = _titleController.text.trim();
+    if (savedTitle != entered && mounted) {
+      _titleController.value = TextEditingValue(
+        text: savedTitle,
+        selection: TextSelection.collapsed(offset: savedTitle.length),
+      );
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Title already exists. Saved with a unique name.'),
+          duration: Duration(seconds: 2),
+        ),
+      );
+    }
     _flashSavedIndicator();
   }
 

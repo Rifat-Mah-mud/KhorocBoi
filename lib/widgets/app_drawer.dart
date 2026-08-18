@@ -8,6 +8,7 @@ import '../providers/theme_provider.dart';
 import '../screens/analytics_screen.dart';
 import '../screens/backup_screen.dart';
 import '../screens/daily_tab_screen.dart';
+import '../screens/recycle_bin_screen.dart';
 import '../theme/app_brand.dart';
 import '../theme/app_theme.dart';
 import 'app_logo.dart';
@@ -143,6 +144,23 @@ class _AppDrawerState extends ConsumerState<AppDrawer> {
               ),
             ),
             Padding(
+              padding: const EdgeInsets.fromLTRB(12, 0, 12, 8),
+              child: ListTile(
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                leading: const Icon(Icons.delete_sweep_outlined),
+                title: const Text('Recycle Bin'),
+                subtitle: Text('${ref.watch(recycledTabsProvider).length} deleted tabs'),
+                onTap: () {
+                  Navigator.pop(context);
+                  Navigator.of(context).push(
+                    MaterialPageRoute(builder: (_) => const RecycleBinScreen()),
+                  );
+                },
+              ),
+            ),
+            Padding(
               padding: const EdgeInsets.fromLTRB(12, 4, 12, 8),
               child: TextField(
                 controller: _searchController,
@@ -157,11 +175,11 @@ class _AppDrawerState extends ConsumerState<AppDrawer> {
                   contentPadding: const EdgeInsets.symmetric(vertical: 0),
                   border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(12),
-                    borderSide: BorderSide(color: AppColors.lushBorder),
+                    borderSide: const BorderSide(color: AppColors.lushBorder),
                   ),
                   enabledBorder: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(12),
-                    borderSide: BorderSide(color: AppColors.lushBorder),
+                    borderSide: const BorderSide(color: AppColors.lushBorder),
                   ),
                 ),
               ),
@@ -240,9 +258,9 @@ class _AppDrawerState extends ConsumerState<AppDrawer> {
                                   final confirmed = await showDialog<bool>(
                                     context: context,
                                     builder: (ctx) => AlertDialog(
-                                      title: const Text('Delete history?'),
+                                      title: const Text('Move to recycle bin?'),
                                       content: Text(
-                                        'Delete all notes and expenses for $label?',
+                                        'Move all notes and expenses for $label to recycle bin for 30 days?',
                                       ),
                                       actions: [
                                         TextButton(
@@ -257,7 +275,7 @@ class _AppDrawerState extends ConsumerState<AppDrawer> {
                                           ),
                                           onPressed: () =>
                                               Navigator.of(ctx).pop(true),
-                                          child: const Text('Yes'),
+                                          child: const Text('Move'),
                                         ),
                                       ],
                                     ),

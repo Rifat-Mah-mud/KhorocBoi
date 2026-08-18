@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/daily_tab.dart';
 import '../models/dictionary_entry.dart';
 import '../models/expense_entry.dart';
+import '../models/recycled_tab.dart';
 import '../core/update/app_update_service.dart';
 import '../services/ai_service.dart';
 import '../services/dictionary_service.dart';
@@ -62,6 +63,11 @@ final tabsProvider = Provider<List<DailyTab>>((ref) {
 final tabByIdProvider = Provider.family<DailyTab?, String>((ref, id) {
   ref.watch(tabsVersionProvider);
   return ref.watch(storageServiceProvider).getTab(id);
+});
+
+final recycledTabsProvider = Provider<List<RecycledTab>>((ref) {
+  ref.watch(tabsVersionProvider);
+  return ref.watch(storageServiceProvider).getRecycledTabs();
 });
 
 final monthTotalProvider = Provider<double>((ref) {
@@ -181,22 +187,41 @@ class TabControllerNotifier extends StateNotifier<AsyncValue<void>> {
     _backup.scheduleUploadAfterEdit();
   }
 
+  Future<void> permanentlyDeleteTab(String tabId) async {
+    await _storage.permanentlyDeleteRecycledTab(tabId);
+    _bump();
+    _backup.scheduleUploadAfterEdit();
+  }
+
+  Future<DailyTab?> restoreTab(String tabId) async {
+    final restored = await _storage.restoreRecycledTab(tabId);
+    _bump();
+    _backup.scheduleUploadAfterEdit();
+    return restored;
+  }
+
   /// Save a renamed tab without re-parsing notes or calling AI.
-  Future<void> saveTabTitle({
+  Future<String> saveTabTitle({
     required String tabId,
     required String customTitle,
   }) async {
     final existing = _storage.getTab(tabId);
-    if (existing == null || existing.customTitle == customTitle) return;
+    if (existing == null) return customTitle.trim();
+    final resolvedTitle = _storage.ensureUniqueTitle(
+      requested: customTitle,
+      excludeTabId: tabId,
+    );
+    if (existing.customTitle == resolvedTitle) return resolvedTitle;
 
     await _storage.updateTabNotesAndEntries(
       tabId: tabId,
       notesText: existing.notesText,
       entries: existing.entries,
-      customTitle: customTitle,
+      customTitle: resolvedTitle,
     );
     _bump();
     _backup.scheduleUploadAfterEdit();
+    return resolvedTitle;
   }
 
   /// Fast local save, then optional AI enrichment in the background.

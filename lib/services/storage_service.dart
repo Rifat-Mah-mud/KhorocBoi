@@ -2,11 +2,15 @@ import 'package:hive_flutter/hive_flutter.dart';
 
 import '../models/daily_tab.dart';
 import '../models/expense_entry.dart';
+import '../models/recycled_tab.dart';
 
 class StorageService {
   static const tabsBoxName = 'daily_tabs';
+  static const recycledTabsBoxName = 'recycled_tabs';
+  static const recycleRetention = Duration(days: 30);
 
   late Box<DailyTab> _tabsBox;
+  late Box<RecycledTab> _recycledTabsBox;
 
   Future<void> init() async {
     await Hive.initFlutter();
@@ -16,7 +20,12 @@ class StorageService {
     if (!Hive.isAdapterRegistered(1)) {
       Hive.registerAdapter(DailyTabAdapter());
     }
+    if (!Hive.isAdapterRegistered(2)) {
+      Hive.registerAdapter(RecycledTabAdapter());
+    }
     _tabsBox = await Hive.openBox<DailyTab>(tabsBoxName);
+    _recycledTabsBox = await Hive.openBox<RecycledTab>(recycledTabsBoxName);
+    await purgeExpiredRecycledTabs();
   }
 
   List<DailyTab> getAllTabs() {
@@ -84,7 +93,13 @@ class StorageService {
   Future<DailyTab> createTodayTab() => createTabForDate(DateTime.now());
 
   Future<void> saveTab(DailyTab tab) async {
-    await _tabsBox.put(tab.id, tab);
+    final resolvedTitle = ensureUniqueTitle(
+      requested: tab.customTitle,
+      excludeTabId: tab.id,
+    );
+    final normalized =
+        resolvedTitle == tab.customTitle ? tab : tab.copyWith(customTitle: resolvedTitle);
+    await _tabsBox.put(normalized.id, normalized);
   }
 
   Future<void> updateTabNotesAndEntries({
@@ -95,19 +110,69 @@ class StorageService {
   }) async {
     final existing = _tabsBox.get(tabId);
     if (existing == null) return;
+    final requestedTitle = customTitle ?? existing.customTitle;
+    final resolvedTitle = ensureUniqueTitle(
+      requested: requestedTitle,
+      excludeTabId: tabId,
+    );
     final updated = existing.copyWith(
       notesText: notesText,
       entries: entries,
-      customTitle: customTitle,
+      customTitle: resolvedTitle,
     );
     await _tabsBox.put(tabId, updated);
   }
 
   Future<void> deleteTab(String id) async {
+    final existing = _tabsBox.get(id);
+    if (existing == null) return;
+    final recycled = RecycledTab(
+      id: existing.id,
+      tab: existing,
+      deletedAt: DateTime.now(),
+    );
+    await _recycledTabsBox.put(recycled.id, recycled);
     await _tabsBox.delete(id);
   }
 
+  List<RecycledTab> getRecycledTabs() {
+    final now = DateTime.now();
+    final items = _recycledTabsBox.values.where((item) {
+      final expiresAt = item.deletedAt.add(recycleRetention);
+      return expiresAt.isAfter(now);
+    }).toList();
+    items.sort((a, b) => b.deletedAt.compareTo(a.deletedAt));
+    return items;
+  }
+
+  Future<int> purgeExpiredRecycledTabs() async {
+    final now = DateTime.now();
+    final expiredIds = _recycledTabsBox.values
+        .where((item) => !item.deletedAt.add(recycleRetention).isAfter(now))
+        .map((item) => item.id)
+        .toList();
+    for (final id in expiredIds) {
+      await _recycledTabsBox.delete(id);
+    }
+    return expiredIds.length;
+  }
+
+  Future<void> permanentlyDeleteRecycledTab(String id) async {
+    await _recycledTabsBox.delete(id);
+  }
+
+  Future<DailyTab?> restoreRecycledTab(String id) async {
+    final recycled = _recycledTabsBox.get(id);
+    if (recycled == null) return null;
+    final restoredTitle = _resolveRestoredTitle(recycled.tab.customTitle);
+    final restored = recycled.tab.copyWith(customTitle: restoredTitle);
+    await _tabsBox.put(restored.id, restored);
+    await _recycledTabsBox.delete(id);
+    return restored;
+  }
+
   Stream<BoxEvent> watchTabs() => _tabsBox.watch();
+  Stream<BoxEvent> watchRecycledTabs() => _recycledTabsBox.watch();
 
   List<DailyTab> tabsInRange(DateTime start, DateTime end) {
     return getAllTabs().where((tab) {
@@ -209,5 +274,33 @@ class StorageService {
       return a.entries.length > b.entries.length;
     }
     return a.total > b.total;
+  }
+
+  String ensureUniqueTitle({
+    required String requested,
+    String? excludeTabId,
+  }) {
+    final base = requested.trim();
+    if (base.isEmpty) return '';
+    final existing = _tabsBox.values
+        .where((t) => t.id != excludeTabId)
+        .map((t) => t.customTitle.trim().toLowerCase())
+        .where((t) => t.isNotEmpty)
+        .toSet();
+    if (!existing.contains(base.toLowerCase())) return base;
+
+    var i = 2;
+    while (true) {
+      final candidate = '$base ($i)';
+      if (!existing.contains(candidate.toLowerCase())) return candidate;
+      i++;
+    }
+  }
+
+  String _resolveRestoredTitle(String original) {
+    final title = original.trim();
+    if (title.isEmpty) return '';
+    final withSuffix = '$title (restored)';
+    return ensureUniqueTitle(requested: withSuffix);
   }
 }
