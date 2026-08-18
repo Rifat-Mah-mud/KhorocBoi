@@ -87,7 +87,7 @@ class AppTheme {
         fontSize: 22,
         fontWeight: FontWeight.w600,
         color: onSurface,
-      ),
+      ).copyWith(fontFamilyFallback: [bengaliFallback.fontFamily!]),
       bodyLarge: GoogleFonts.inter(
         fontSize: 16,
         fontWeight: FontWeight.w400,

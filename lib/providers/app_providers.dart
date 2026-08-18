@@ -1,3 +1,6 @@
+import 'dart:async';
+
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../models/daily_tab.dart';
@@ -79,7 +82,19 @@ class AnalyticsState {
 
   DailyTab? get highestDay {
     if (tabs.isEmpty) return null;
-    return tabs.reduce((a, b) => a.total >= b.total ? a : b);
+    final totals = dailyTotals;
+    if (totals.isEmpty) return null;
+    final bestDate =
+        totals.entries.reduce((a, b) => a.value >= b.value ? a : b).key;
+    return tabs
+        .where((t) => t.dateOnly == bestDate)
+        .reduce((a, b) => a.total >= b.total ? a : b);
+  }
+
+  double get highestDayTotal {
+    final day = highestDay;
+    if (day == null) return 0;
+    return dailyTotals[day.dateOnly] ?? day.total;
   }
 
   Map<DateTime, double> get dailyTotals {
@@ -130,6 +145,7 @@ class TabControllerNotifier extends StateNotifier<AsyncValue<void>> {
   StorageService get _storage => ref.read(storageServiceProvider);
   ExpenseParserService get _parser => ref.read(parserServiceProvider);
   CloudSyncService get _backup => ref.read(cloudSyncServiceProvider);
+  int _enrichEpoch = 0;
 
   void _bump() {
     ref.read(tabsVersionProvider.notifier).state++;
@@ -165,61 +181,130 @@ class TabControllerNotifier extends StateNotifier<AsyncValue<void>> {
     _backup.scheduleUploadAfterEdit();
   }
 
-  /// Debounced auto-save: sync parse for UI speed, then AI enrich unknown terms.
+  /// Save a renamed tab without re-parsing notes or calling AI.
+  Future<void> saveTabTitle({
+    required String tabId,
+    required String customTitle,
+  }) async {
+    final existing = _storage.getTab(tabId);
+    if (existing == null || existing.customTitle == customTitle) return;
+
+    await _storage.updateTabNotesAndEntries(
+      tabId: tabId,
+      notesText: existing.notesText,
+      entries: existing.entries,
+      customTitle: customTitle,
+    );
+    _bump();
+    _backup.scheduleUploadAfterEdit();
+  }
+
+  /// Fast local save, then optional AI enrichment in the background.
   Future<void> autoSaveTab({
     required String tabId,
     required String notesText,
     String? customTitle,
+    bool backgroundAi = true,
   }) async {
-    state = const AsyncLoading();
     try {
-      // Instant local parse for responsive totals.
-      final syncParsed = _parser.parseNotesSync(notesText);
-      var entries = syncParsed
-          .map(
-            (p) => ExpenseEntry(
-              rawText: p.originalText,
-              cleanedItem: p.item,
-              amount: p.amount,
-              category: p.category,
-              timestamp: p.timestamp,
-            ),
-          )
-          .toList();
+      final existing = _storage.getTab(tabId);
+      final title = customTitle ?? existing?.customTitle ?? '';
+      final unchanged = existing != null &&
+          existing.notesText == notesText &&
+          existing.customTitle == title;
+      if (unchanged) return;
 
-      await _storage.updateTabNotesAndEntries(
+      await _saveParsedTab(
         tabId: tabId,
         notesText: notesText,
-        entries: entries,
         customTitle: customTitle,
       );
-      _bump();
 
-      // Background AI enrichment for unknown words.
-      final enriched = await _parser.parseNotes(notesText);
-      entries = enriched
-          .map(
-            (p) => ExpenseEntry(
-              rawText: p.originalText,
-              cleanedItem: p.item,
-              amount: p.amount,
-              category: p.category,
-              timestamp: p.timestamp,
-            ),
-          )
-          .toList();
+      if (backgroundAi) {
+        _backup.scheduleUploadAfterEdit();
+        unawaited(
+          _enrichTabInBackground(
+            tabId: tabId,
+            notesText: notesText,
+            customTitle: customTitle,
+          ),
+        );
+        return;
+      }
 
-      await _storage.updateTabNotesAndEntries(
+      await _enrichTabInBackground(
         tabId: tabId,
         notesText: notesText,
-        entries: entries,
         customTitle: customTitle,
       );
-      _bump();
-      _backup.scheduleUploadAfterEdit();
-      state = const AsyncData(null);
     } catch (e, st) {
       state = AsyncError(e, st);
+    }
+  }
+
+  Future<void> _saveParsedTab({
+    required String tabId,
+    required String notesText,
+    String? customTitle,
+  }) async {
+    final syncParsed = _parser.parseNotesSync(notesText);
+    final entries = syncParsed
+        .map(
+          (p) => ExpenseEntry(
+            rawText: p.originalText,
+            cleanedItem: p.item,
+            amount: p.amount,
+            category: p.category,
+            timestamp: p.timestamp,
+          ),
+        )
+        .toList();
+
+    await _storage.updateTabNotesAndEntries(
+      tabId: tabId,
+      notesText: notesText,
+      entries: entries,
+      customTitle: customTitle,
+    );
+    _bump();
+  }
+
+  Future<void> _enrichTabInBackground({
+    required String tabId,
+    required String notesText,
+    String? customTitle,
+  }) async {
+    final epoch = ++_enrichEpoch;
+    try {
+      final enriched = await _parser.parseNotes(notesText);
+      if (epoch != _enrichEpoch) return;
+
+      final entries = enriched
+          .map(
+            (p) => ExpenseEntry(
+              rawText: p.originalText,
+              cleanedItem: p.item,
+              amount: p.amount,
+              category: p.category,
+              timestamp: p.timestamp,
+            ),
+          )
+          .toList();
+
+      await _storage.updateTabNotesAndEntries(
+        tabId: tabId,
+        notesText: notesText,
+        entries: entries,
+        customTitle: customTitle,
+      );
+      if (epoch != _enrichEpoch) return;
+      _bump();
+      _backup.scheduleUploadAfterEdit();
+    } catch (e, st) {
+      debugPrint('Background AI enrichment failed: $e\n$st');
+      if (epoch == _enrichEpoch) {
+        _backup.scheduleUploadAfterEdit();
+      }
     }
   }
 }

@@ -44,7 +44,10 @@ class _AppDrawerState extends ConsumerState<AppDrawer> {
                 .contains(q) ||
             DateFormat('d MMM yyyy').format(tab.date).toLowerCase().contains(q) ||
             DateFormat('MMMM').format(tab.date).toLowerCase().contains(q);
-        if (!matchDate) continue;
+        final matchTitle = tab.customTitle.toLowerCase().contains(q) ||
+            tab.tabLabel.toLowerCase().contains(q);
+        final matchNotes = tab.notesText.toLowerCase().contains(q);
+        if (!matchDate && !matchTitle && !matchNotes) continue;
       }
       grouped.putIfAbsent(label, () => []).add(tab);
     }
@@ -145,7 +148,7 @@ class _AppDrawerState extends ConsumerState<AppDrawer> {
                 controller: _searchController,
                 onChanged: (v) => setState(() => _query = v.trim()),
                 decoration: InputDecoration(
-                  hintText: 'Search by date…',
+                  hintText: 'Search by date or name…',
                   prefixIcon: const Icon(Icons.search, size: 20),
                   filled: true,
                   fillColor: Theme.of(context).brightness == Brightness.light

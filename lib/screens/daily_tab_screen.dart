@@ -2,7 +2,6 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:google_fonts/google_fonts.dart';
 
 import '../providers/app_providers.dart';
 import '../theme/app_theme.dart';
@@ -22,9 +21,11 @@ class _DailyTabScreenState extends ConsumerState<DailyTabScreen>
   late final TextEditingController _controller;
   late final TextEditingController _titleController;
   Timer? _debounce;
+  Timer? _titleDebounce;
   bool _expanded = false;
   bool _showSaved = false;
   bool _hydrated = false;
+  bool _leaving = false;
 
   @override
   void initState() {
@@ -40,6 +41,7 @@ class _DailyTabScreenState extends ConsumerState<DailyTabScreen>
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     _debounce?.cancel();
+    _titleDebounce?.cancel();
     _controller.removeListener(_onNotesChanged);
     _titleController.removeListener(_onTitleChanged);
     _controller.dispose();
@@ -49,9 +51,10 @@ class _DailyTabScreenState extends ConsumerState<DailyTabScreen>
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state == AppLifecycleState.paused ||
-        state == AppLifecycleState.inactive) {
-      _saveNow();
+    // `inactive` also fires when the keyboard hides or a route pops — saving
+    // there rebuilds the tree mid-transition and looks like a freeze.
+    if (state == AppLifecycleState.paused) {
+      unawaited(_saveNow());
     }
   }
 
@@ -64,12 +67,14 @@ class _DailyTabScreenState extends ConsumerState<DailyTabScreen>
   }
 
   void _onNotesChanged() {
+    if (_leaving) return;
     _scheduleSave(faster: _controller.text.endsWith('\n'));
   }
 
   void _onTitleChanged() {
-    setState(() {});
-    _scheduleSave();
+    if (_leaving) return;
+    _titleDebounce?.cancel();
+    _titleDebounce = Timer(const Duration(milliseconds: 400), _saveTitleNow);
   }
 
   void _scheduleSave({bool faster = false}) {
@@ -80,18 +85,53 @@ class _DailyTabScreenState extends ConsumerState<DailyTabScreen>
     );
   }
 
+  Future<void> _saveTitleNow() async {
+    if (_leaving) return;
+    _titleDebounce?.cancel();
+    await ref.read(tabControllerProvider.notifier).saveTabTitle(
+          tabId: widget.tabId,
+          customTitle: _titleController.text,
+        );
+    _flashSavedIndicator();
+  }
+
   Future<void> _saveNow() async {
+    if (_leaving) return;
     _debounce?.cancel();
     await ref.read(tabControllerProvider.notifier).autoSaveTab(
           tabId: widget.tabId,
           notesText: _controller.text,
           customTitle: _titleController.text,
         );
-    if (!mounted) return;
+    _flashSavedIndicator();
+  }
+
+  void _flashSavedIndicator() {
+    if (!mounted || _leaving) return;
     setState(() => _showSaved = true);
     Future.delayed(const Duration(seconds: 2), () {
-      if (mounted) setState(() => _showSaved = false);
+      if (mounted && !_leaving) setState(() => _showSaved = false);
     });
+  }
+
+  void _handleBack() {
+    if (_leaving) return;
+    _leaving = true;
+    _debounce?.cancel();
+    _titleDebounce?.cancel();
+
+    final notes = _controller.text;
+    final title = _titleController.text;
+    final controller = ref.read(tabControllerProvider.notifier);
+
+    Navigator.of(context).pop();
+    unawaited(
+      controller.autoSaveTab(
+        tabId: widget.tabId,
+        notesText: notes,
+        customTitle: title,
+      ),
+    );
   }
 
   @override
@@ -115,112 +155,124 @@ class _DailyTabScreenState extends ConsumerState<DailyTabScreen>
       sameDayCount: sameDayCount,
       pattern: 'MMM d, yyyy',
     );
-    final hasTitle = _titleController.text.trim().isNotEmpty;
-    final bengali = GoogleFonts.notoSansBengali();
 
-    return Scaffold(
-      appBar: AppBar(
-        toolbarHeight: hasTitle ? 72 : kToolbarHeight,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back),
-          onPressed: () async {
-            await _saveNow();
-            if (context.mounted) Navigator.of(context).pop();
-          },
-        ),
-        title: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            TextField(
-              controller: _titleController,
-              maxLines: 1,
-              textInputAction: TextInputAction.done,
-              style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                    fontWeight: FontWeight.w700,
-                    color: AppColors.primary,
-                    fontFamilyFallback: [bengali.fontFamily!],
-                  ),
-              decoration: InputDecoration(
-                isDense: true,
-                border: InputBorder.none,
-                hintText: dateLabel,
-                hintStyle: Theme.of(context).textTheme.titleLarge?.copyWith(
+    final now = DateTime.now();
+    final isToday = tab.date.year == now.year &&
+        tab.date.month == now.month &&
+        tab.date.day == now.day;
+
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, result) {
+        if (didPop) return;
+        _handleBack();
+      },
+      child: Scaffold(
+        appBar: AppBar(
+          toolbarHeight: 72,
+          leading: IconButton(
+            icon: const Icon(Icons.arrow_back),
+            onPressed: _handleBack,
+          ),
+          title: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(
+                controller: _titleController,
+                maxLines: 1,
+                textInputAction: TextInputAction.done,
+                style: Theme.of(context).textTheme.titleLarge?.copyWith(
                       fontWeight: FontWeight.w700,
                       color: AppColors.primary,
                     ),
-                contentPadding: EdgeInsets.zero,
-              ),
-            ),
-            if (hasTitle)
-              Text(
-                dateLabel,
-                style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                      color: AppColors.onSurfaceVariant,
-                      fontWeight: FontWeight.w500,
-                    ),
-              ),
-          ],
-        ),
-        actions: [
-          AnimatedOpacity(
-            opacity: _showSaved ? 1 : 0,
-            duration: const Duration(milliseconds: 250),
-            child: Padding(
-              padding: const EdgeInsets.only(right: 12),
-              child: Row(
-                children: [
-                  Text(
-                    'Saved',
-                    style: Theme.of(context).textTheme.labelMedium,
-                  ),
-                  const SizedBox(width: 8),
-                  Container(
-                    width: 8,
-                    height: 8,
-                    decoration: const BoxDecoration(
-                      color: AppColors.primary,
-                      shape: BoxShape.circle,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ],
-      ),
-      body: Column(
-        children: [
-          Expanded(
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
-              child: TextField(
-                controller: _controller,
-                maxLines: null,
-                expands: true,
-                textAlignVertical: TextAlignVertical.top,
-                style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                      fontFamilyFallback: [bengali.fontFamily!],
-                    ),
                 decoration: InputDecoration(
+                  isDense: true,
                   border: InputBorder.none,
-                  hintText:
-                      "Try 'bus vara 20 tk' or 'banana 20 tk apple 30 tk'…",
-                  hintStyle: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                        color: AppColors.onSurfaceVariant.withValues(alpha: 0.5),
-                        fontFamilyFallback: [bengali.fontFamily!],
+                  hintText: dateLabel,
+                  hintStyle: Theme.of(context).textTheme.titleLarge?.copyWith(
+                        fontWeight: FontWeight.w700,
+                        color: AppColors.primary,
                       ),
+                  contentPadding: EdgeInsets.zero,
+                ),
+              ),
+              ValueListenableBuilder<TextEditingValue>(
+                valueListenable: _titleController,
+                builder: (context, value, _) {
+                  if (value.text.trim().isEmpty) {
+                    return const SizedBox.shrink();
+                  }
+                  return Text(
+                    dateLabel,
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          color: AppColors.onSurfaceVariant,
+                          fontWeight: FontWeight.w500,
+                        ),
+                  );
+                },
+              ),
+            ],
+          ),
+          actions: [
+            AnimatedOpacity(
+              opacity: _showSaved ? 1 : 0,
+              duration: const Duration(milliseconds: 250),
+              child: Padding(
+                padding: const EdgeInsets.only(right: 12),
+                child: Row(
+                  children: [
+                    Text(
+                      'Saved',
+                      style: Theme.of(context).textTheme.labelMedium,
+                    ),
+                    const SizedBox(width: 8),
+                    Container(
+                      width: 8,
+                      height: 8,
+                      decoration: const BoxDecoration(
+                        color: AppColors.primary,
+                        shape: BoxShape.circle,
+                      ),
+                    ),
+                  ],
                 ),
               ),
             ),
-          ),
-          SpendingSummaryBar(
-            total: tab.total,
-            entries: tab.entries,
-            expanded: _expanded,
-            onToggle: () => setState(() => _expanded = !_expanded),
-          ),
-        ],
+          ],
+        ),
+        body: Column(
+          children: [
+            Expanded(
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+                child: TextField(
+                  controller: _controller,
+                  maxLines: null,
+                  expands: true,
+                  textAlignVertical: TextAlignVertical.top,
+                  style: Theme.of(context).textTheme.bodyLarge,
+                  decoration: InputDecoration(
+                    border: InputBorder.none,
+                    hintText:
+                        "Try 'bus vara 20 tk' or 'banana 20 tk apple 30 tk'…",
+                    hintStyle: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                          color:
+                              AppColors.onSurfaceVariant.withValues(alpha: 0.5),
+                        ),
+                  ),
+                ),
+              ),
+            ),
+            SpendingSummaryBar(
+              total: tab.total,
+              entries: tab.entries,
+              expanded: _expanded,
+              onToggle: () => setState(() => _expanded = !_expanded),
+              label: isToday ? "Today's Total" : 'Total',
+            ),
+          ],
+        ),
       ),
     );
   }

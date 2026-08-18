@@ -23,12 +23,14 @@ class SpendingSummaryBar extends StatelessWidget {
     required this.entries,
     required this.expanded,
     required this.onToggle,
+    this.label,
   });
 
   final double total;
   final List<ExpenseEntry> entries;
   final bool expanded;
   final VoidCallback onToggle;
+  final String? label;
 
   @override
   Widget build(BuildContext context) {
@@ -55,7 +57,7 @@ class SpendingSummaryBar extends StatelessWidget {
                   children: [
                     Expanded(
                       child: Text(
-                        "Today's Total",
+                        label ?? 'Total',
                         style: Theme.of(context).textTheme.headlineSmall,
                       ),
                     ),

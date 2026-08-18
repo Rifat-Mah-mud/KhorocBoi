@@ -233,6 +233,11 @@ class AnalyticsScreen extends ConsumerWidget {
               child: InkWell(
                 borderRadius: BorderRadius.circular(16),
                 onTap: () {
+                  final dayTabs = analytics.tabs
+                      .where((t) => t.dateOnly == highest.dateOnly)
+                      .toList();
+                  final dayEntries =
+                      dayTabs.expand((t) => t.entries).toList();
                   showModalBottomSheet(
                     context: context,
                     isScrollControlled: true,
@@ -251,10 +256,11 @@ class AnalyticsScreen extends ConsumerWidget {
                               ),
                               const SizedBox(height: 12),
                               SpendingSummaryBar(
-                                total: highest.total,
-                                entries: highest.entries,
+                                total: analytics.highestDayTotal,
+                                entries: dayEntries,
                                 expanded: true,
                                 onToggle: () {},
+                                label: 'Total',
                               ),
                               const SizedBox(height: 12),
                               FilledButton(
@@ -311,7 +317,7 @@ class AnalyticsScreen extends ConsumerWidget {
                         ),
                       ),
                       Text(
-                        '৳ ${money.format(highest.total)}',
+                        '৳ ${money.format(analytics.highestDayTotal)}',
                         style:
                             Theme.of(context).textTheme.titleMedium?.copyWith(
                                   color: AppColors.primary,
